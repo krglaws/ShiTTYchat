@@ -1,3 +1,3 @@
 # ShiTTY Chat
 
-A very bad commandline chat application
+A very bad command line chat application
