@@ -1,4 +1,6 @@
 
+#include <server.h>
+#include <client_manager.h>
 
 static unsigned num_clients = 0;
 
@@ -10,17 +12,38 @@ static int validate_connection_request(char msg_buffer, unsigned len);
 
 static int hand_shake(const int socket, const rsa_key_t server_key, rsa_key_t client_key)
 {
-  char msg_buffer[] = {0};
-  int len;
+  char *valid_out_request = "{ShiTTYchat-Version: " VERSION "; Connection-Request: OUT-sock}";
+  char *valid_in_request =  "{ShiTTYchat-Version: " VERSION "; Connection-Request: IN-sock}";
 
-  // we expect a short message from client with version info, client key, etc.
-  if ((len = receive_message(socket, msg_buffer, 128)) == -1)
+  int len = strlen(valid_out_request);
+  char msg_buffer[len+1];
+  memset(msg_buffer, 0, len+1);
+
+  char* reject_msg = "{Connection-Request: rejected; Reason: message too long?}"
+  // we expect a short message from client with version info and connection type
+  if ((len = receive_message(socket, msg_buffer, len)) == -1)
   {
-    fprintf(stderr, "exchange_keys(): failed on call to receive_message()\n");
+    send_message(socket, reject_msg, strlen(reject_msg));
+    fprintf(stderr, "exchange_keys(): invalid connection request: call to receive_message() failed.\n");
     return -1;
   }
 
-  
+  char* accept_msg = "{Connection-Request: accepted}";
+  // compare request with valid OUT-sock request
+  if (strcmp(valid_out_request, msg_buffer) == 0)
+  {
+    // tell client request is accepted
+    send_message(socket, accept_msg, strlen(accept_msg));
+  }
+
+  // compare request with valid IN-sock request
+  else if (strcmp(valid_in_request, msg_buffer) == 0)
+  {
+    
+  }
+
+  fprintf(stderr, "exchange_keys(): invalid connection request message.\n");
+  return -1; 
 }
 
 
@@ -62,6 +85,7 @@ int add_client(const int socket, const char* ip, const rsa_key_t server_key)
   // allocate space for new client entry
   client_entry_t* entry = malloc(sizeof(client_entry_t));
 
+  // fill in entry with client attributes
   entry->socket = socket;
   memcpy(entry->ip, ip, strlen(ip));
   memcpy(entry->uname, uname, UNAMELEN);
@@ -71,13 +95,6 @@ int add_client(const int socket, const char* ip, const rsa_key_t server_key)
   entry->key->b = client_key->b;
 
   entry->next_entry = NULL;
-
-  // if list is empty, set new client entry as first entry
-  if (client_list == NULL)
-  {
-    client_list = entry;
-    return 0;
-  }
 
   // find end of client entry list and append new client entry
   client_entry_t* iterator = client_list;
@@ -139,17 +156,43 @@ int initialize_fdset(fd_set* fds)
 {
   int max = 0;
 
+  // zero out socket set
   FD_ZERO(fds);
 
+  /* iterate over each client entry, adding each socket to socket set,
+     and also keeping track of highest socket value */
   client_entry_t* iterator = client_list;
-
   while (iterator)
   {
-    
+    // get socket from client entry
+    int socket = iterator->socket;
+
+    // add socket to set
+    FD_SET(socket, fds);
+
+    // check if current socket is the highest we've seen
+    if (socket > max) max = socket;
+
+    // get next client entry
+    iterator = iterator->next_entry;
   }
-  
+
+  return max; 
 }
 
 
-#endif
+int get_active_fd(fd_set* fds)
+{
+  // iterate over client entry list and find active socket
+  client_entry_t* iterator = client_list;
+  while (iterator)
+  {
+    int socket = iterator->socket;
+    if (FD_ISSET(socket, fds))
+      return socket;
+  }
+
+  fprintf(stderr, "get_active_fd(): could not find active socket\n");
+  return -1;
+}
 

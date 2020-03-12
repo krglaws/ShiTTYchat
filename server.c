@@ -21,8 +21,9 @@ int main(int argc, char** argv)
   char ip_str[20] = {0};
   fd_set readfds;
 
+  // initialize rsa keys
   rsa_key_t pubkey, privkey;
-  rsa_init(pubkey, privkey, RSA_KEY_LEN, RSA_KEY_ENC);
+  rsa_init(pubkey, privkey, RSA_KEY_LEN, RSA_ENCODING);
 
   // clear server and client addresses
   memset(&server_addr, 0, addr_len);
@@ -110,38 +111,4 @@ int main(int argc, char** argv)
     }
   }
 }
-
-
-int initialize_fdset(fd_set* fds)
-{
-  int max = 0;
-  datacont* dc;
-
-  FD_ZERO(fds);
-
-  for (int i = 0; i < num_conns; i++)
-  {
-    dc = list_get(clients, i);
-    FD_SET(dc->i, fds);
-    if (max < dc->i) max = dc->i;
-  }
-  return max; 
-}
-
-
-int get_active_fd(fd_set* fds)
-{
-  datacont* dc;
-  for (int i = 0; i < num_conns; i++)
-  {
-    dc = list_get(clients, i);
-    if (FD_ISSET(dc->i, fds))
-    {
-      int fd = dc->i;
-      return fd;
-    }
-  }
-  return -1;
-}
-
 
