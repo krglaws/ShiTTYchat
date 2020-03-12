@@ -25,7 +25,11 @@ int receive_message(int socket, char* msg, unsigned msg_len)
 
     // check if there are bytes still to be read
     int available = 0;
-    ioctl(socket, FIONREAD, &available);
+    if (ioctl(socket, FIONREAD, &available) == -1)
+    {
+      perror(stderr, "receive_message()");
+      return -1;
+    }
 
     // if there are too many bytes, stop to prevent buffer overflow
     if (total + available > msg_len)
@@ -52,6 +56,8 @@ int receive_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t
 {
   // Read raw message bytes into msg
   if (receive_message(socket, msg, msg_len) == -1)
+  {
+    fprintf(stderr, "receive_encrypted_message(): failed on call to receive_message()\n");
     return -1;
 
   // could validate here, or let the message parser figure out if it's gibberish
@@ -61,7 +67,7 @@ int receive_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t
 }
 
 
-void send_message(int socket, char* msg, unsigned msg_len)
+int send_message(int socket, char* msg, unsigned msg_len)
 {
   // Keep sending while total bytes sent is less than message length
   int total = 0, sent = 0;
@@ -70,14 +76,16 @@ void send_message(int socket, char* msg, unsigned msg_len)
     if ((sent = send(socket, msg + total, msg_len - total, 0)) == -1)
     {
       perror("send_message()");
-      exit(EXIT_FAILURE);
+      return -1;
     }
     total += sent;
   }
+
+  return 0;
 }
 
 
-void send_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t pubkey)
+int send_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t pubkey)
 {
   // This will be used to encrypt and send in segments
   char *start = msg;
@@ -104,13 +112,16 @@ void send_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t p
     int bytes_to_send = rsa_encrypt(enc, num_bytes, message, pubkey);
 
     // Send bytes
-    send_message(socket, enc, bytes_to_send);
+    if (send_message(socket, enc, bytes_to_send) == -1)
+    {
+      fprintf(stderr, "send_encrypted_message(): failed on call to send_message()\n");
+      return -1;
+    }
 
     // shift up to the next segment
     start += num_bytes;
   }
+
+  return 0;
 }
-
-
-
 

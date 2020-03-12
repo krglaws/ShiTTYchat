@@ -1,11 +1,5 @@
 
 #define _GNU_SOURCE
-
-#include <sys/socket.h>
-#include <arpa/intet.h>
-#include <netinet/in.h>
-#include "comm.c"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,8 +7,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <inttypes.h>
-#include <kylestructs.h>
+
+#include <server.h>
+#include <rsa.h>
+#include <comm.h>
 
 
 int main(int argc, char** argv)
@@ -25,6 +21,9 @@ int main(int argc, char** argv)
   char ip_str[20] = {0};
   fd_set readfds;
 
+  rsa_key_t pubkey, privkey;
+  rsa_init(pubkey, privkey, RSA_KEY_LEN, RSA_KEY_ENC);
+
   // clear server and client addresses
   memset(&server_addr, 0, addr_len);
   memset(&client_addr, 0, addr_len);
@@ -33,9 +32,6 @@ int main(int argc, char** argv)
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = 420;
   inet_pton(AF_INET, "0.0.0.0", &(server_addr.sin_addr));
-
-  // initialize client socket list
-  list* client_list = list_new();
 
   // create server socket
   if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
@@ -57,6 +53,9 @@ int main(int argc, char** argv)
     perror("Failed to designate server socket");
     exit(EXIT_FAILURE);
   }
+
+  // initialize client manager
+  init_client_manager(server_fd);
 
   printf("Listening on port %d...\n", ntohs(opts->server_port));
   while (1)
@@ -97,7 +96,7 @@ int main(int argc, char** argv)
       printf("Connected to %s.\n", ip_str);
 
       // add new connection
-      list_add(client_list, datacont_new(&client_fd, INT, 1));
+      add_client(client_fd, 
 
       // set active socket to newly accepted client socket
       active_fd = client_fd;
@@ -107,16 +106,42 @@ int main(int argc, char** argv)
     else
     {
       // receive message, and then broadcast to other clients
-      
+     
     }
   }
 }
 
 
-void add_new_connection(int socket, struct sockaddr_in* addr)
+int initialize_fdset(fd_set* fds)
 {
+  int max = 0;
+  datacont* dc;
 
+  FD_ZERO(fds);
+
+  for (int i = 0; i < num_conns; i++)
+  {
+    dc = list_get(clients, i);
+    FD_SET(dc->i, fds);
+    if (max < dc->i) max = dc->i;
+  }
+  return max; 
 }
 
+
+int get_active_fd(fd_set* fds)
+{
+  datacont* dc;
+  for (int i = 0; i < num_conns; i++)
+  {
+    dc = list_get(clients, i);
+    if (FD_ISSET(dc->i, fds))
+    {
+      int fd = dc->i;
+      return fd;
+    }
+  }
+  return -1;
+}
 
 
