@@ -39,7 +39,7 @@ int receive_message(int socket, char* msg, unsigned msg_len)
     }
 
   // when recv returns 0, remote is done sending
-  } while(received > 0);
+  } while (received > 0);
 
   // check for empty message
   if (total == 0)
@@ -59,6 +59,7 @@ int receive_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t
   {
     fprintf(stderr, "receive_encrypted_message(): failed on call to receive_message()\n");
     return -1;
+  }
 
   // could validate here, or let the message parser figure out if it's gibberish
 
@@ -87,39 +88,44 @@ int send_message(int socket, char* msg, unsigned msg_len)
 
 int send_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t pubkey)
 {
-  // This will be used to encrypt and send in segments
-  char *start = msg;
+  char enc[MAX_MSG_LEN];
+  char* enc_next = enc;
+  char* msg_end = msg + msg_len;
 
-  /* The length of the modulus is the maximum possible length of
-     encrypted value */
-  int enc_len = strlen(pubkey->m);
-  char enc[enc_len + 1]; // add one for NULL terminator
-
-  // Get the maximum number of bytes that can be encrypted at a time
+  // Get max bytes for encryption
   int max_bytes = rsa_max_bytes(pubkey);
 
-  // while start has not reached the end of the message
-  while(start < msg + msg_len)
+  // while end of message not reached
+  while (msg < end)
   {
     // Assume we are sending the maximum length possible
     int num_bytes = max_bytes;
 
     // Truncate num_bytes if > remaining to be sent
-    if (msg_len - msg < max_bytes)
-      num_bytes = msg_len - msg;
+    if (msg + num_bytes > end)
+      num_bytes = end - msg;
 
-    // Encrypt and save the length of encrypted result
-    int bytes_to_send = rsa_encrypt(enc, num_bytes, message, pubkey);
-
-    // Send bytes
-    if (send_message(socket, enc, bytes_to_send) == -1)
+    // check if we are out of space in encryption buffer
+    if (enc_next + max_bytes > MAX_MSG_LEN)
     {
-      fprintf(stderr, "send_encrypted_message(): failed on call to send_message()\n");
+      fprintf(stderr, "send_encrypted_message(): message too long (> %d)\n", MAX_MSG_LEN);
       return -1;
     }
 
+    // Encrypt and save the length of encrypted result
+    int enc_len = rsa_encrypt(enc_next, num_bytes, msg, pubkey);
+
+    enc_next += enc_len;
+
     // shift up to the next segment
-    start += num_bytes;
+    msg += num_bytes;
+  }
+
+  // send encrypted bytes
+  if (send_message(socket, enc, enc_next - enc) == -1)
+  {
+    sprintf(stderr, "send_encrypted_message(): failed on call to send_message()\n");
+    return -1;
   }
 
   return 0;
