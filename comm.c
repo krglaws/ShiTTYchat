@@ -1,14 +1,17 @@
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <rsa.h>
 
+#include <comm.h>
+
 
 int receive_message(int socket, char* msg, unsigned msg_len)
 {
-  int total = 0, received = 0;
+  int total = 0, received = 0, available = 0;
 
   do
   {
@@ -17,17 +20,16 @@ int receive_message(int socket, char* msg, unsigned msg_len)
     if (received == -1)
     {
       perror("receive_message()");
-      exit(EXIT_FAILURE);
+      return -1;
     }
 
     // add received bytes to total
     total += received;
 
     // check if there are bytes still to be read
-    int available = 0;
     if (ioctl(socket, FIONREAD, &available) == -1)
     {
-      perror(stderr, "receive_message()");
+      perror("receive_message()");
       return -1;
     }
 
@@ -39,32 +41,84 @@ int receive_message(int socket, char* msg, unsigned msg_len)
     }
 
   // when recv returns 0, remote is done sending
-  } while (received > 0);
-
-  // check for empty message
-  if (total == 0)
-  {
-    fprintf(stderr, "receive_message(): message empty.\n");
-    return -1;
-  }
+  } while (available > 0);
 
   return total;
 }
 
 
+/* 
+ * When receiving and decrypting a message, the length of the encrypted
+ * message must be aligned with the 'chunk size' of the rsa key. That is,
+ * received_bytes % chunk_size must be 0.
+ */
 int receive_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t privkey)
 {
-  // Read raw message bytes into msg
-  if (receive_message(socket, msg, msg_len) == -1)
+  // temp buffer to hold encrypted message
+  char enc[MAX_MSG_LEN];
+  char* enc_next = enc;
+
+  int chunk_size = strlen(privkey->m);
+
+  // read in message from socket
+  int received = receive_message(socket, enc, MAX_MSG_LEN);
+
+  // find end of encrypted message
+  char* enc_end = enc + received;
+
+  // check if receive_message() failed
+  if (received == -1)
   {
     fprintf(stderr, "receive_encrypted_message(): failed on call to receive_message()\n");
     return -1;
   }
 
-  // could validate here, or let the message parser figure out if it's gibberish
+  // check if encrypted message is not aligned with chunk size
+  if (received % chunk_size != 0)
+  {
+    fprintf(stderr, "receive_encrypted_message(): encrypted message is not aligned with chunk size\n");
+    return -1;
+  }
 
-  // Decrypt message and return length
-  return rsa_decrypt(msg, msg, privkey);
+  // if message is empty, just return
+  if (received == 0)
+    return 0;
+
+  char* msg_next = msg;
+  char* msg_end = msg + msg_len;
+
+  // temp buffer to hold decrypted chunk
+  char raw_chunk[chunk_size + 1]; // +1 for NULL terminator
+  int raw_len = 0;
+
+  while (enc_next < enc_end)
+  {
+    // decypt, store into raw_chunk
+    int dec_bytes = rsa_decrypt(raw_chunk, chunk_size, enc_next, privkey);
+
+    raw_len += dec_bytes;
+
+    // check if raw message has exceeded msg_len
+    if (raw_len > msg_len)
+    {
+      fprintf(stderr, "receive_encrypted_message(): decrypted message is too long\n");
+      return -1;
+    }
+
+    // increment to decrypt next chunk
+    enc_next += chunk_size;
+
+    // copy decrypted bytes into msg
+    memcpy(msg_next, raw_chunk, dec_bytes);
+
+    // increment to end of decrypted bytes
+    msg_next += dec_bytes;
+  }
+
+  // set null terminator
+  msg_next[0] = 0;
+
+  return raw_len;
 }
 
 
@@ -86,45 +140,83 @@ int send_message(int socket, char* msg, unsigned msg_len)
 }
 
 
+/*
+ * When we encrypt a message, it must be carefully sectioned into "chunks", each
+ * chunk being a segment of bytes of strict length. This way, an entire message
+ * can be sent at once without accidentally trying to decrypt, say, the second half
+ * of one chunk and the first half of its neighbor (which would of course result
+ * in gibberish).
+ *
+ * The length of each chunk is determined by the length of the rsa key divisor in
+ * bytes. If an encrypted value happens to be shorter in length than that, it must
+ * be prepended with '0' characters so that it is the correct length when sent over
+ * the network.
+ */
 int send_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t pubkey)
 {
-  char enc[MAX_MSG_LEN];
-  char* enc_next = enc;
-  char* msg_end = msg + msg_len;
+  // chunk length == length of divisor in bytes 
+  int chunk_len = strlen(pubkey->m);
 
-  // Get max bytes for encryption
+  // max encryptable bytes (one or two bytes less than chunk_length)
   int max_bytes = rsa_max_bytes(pubkey);
 
-  // while end of message not reached
-  while (msg < end)
+  // find number of chunks required
+  int num_chunks = msg_len / max_bytes;
+  num_chunks += msg_len % chunk_len ? 1 : 0;
+
+  // check if msg is too long
+  if (num_chunks * chunk_len > MAX_MSG_LEN)
   {
-    // Assume we are sending the maximum length possible
-    int num_bytes = max_bytes;
-
-    // Truncate num_bytes if > remaining to be sent
-    if (msg + num_bytes > end)
-      num_bytes = end - msg;
-
-    // check if we are out of space in encryption buffer
-    if (enc_next + max_bytes > MAX_MSG_LEN)
-    {
-      fprintf(stderr, "send_encrypted_message(): message too long (> %d)\n", MAX_MSG_LEN);
-      return -1;
-    }
-
-    // Encrypt and save the length of encrypted result
-    int enc_len = rsa_encrypt(enc_next, num_bytes, msg, pubkey);
-
-    enc_next += enc_len;
-
-    // shift up to the next segment
-    msg += num_bytes;
+    fprintf(stderr, "send_encrypted_message(): message too long\n");
+    return -1;
   }
 
-  // send encrypted bytes
+  // encryption buffer
+  char enc[MAX_MSG_LEN + 1];
+
+  // keep track of where next bytes should be stored
+  char* enc_next = enc;
+  char* enc_end = enc + MAX_MSG_LEN;
+
+  // temporary encryption buffer
+  char enc_tmp[chunk_len + 1];
+
+  // keep track of next bytes to encrypt
+  char* msg_next = msg;
+  char* msg_end = msg + msg_len;
+
+  // while there are bytes left to encrypt
+  while (msg_next < msg_end)
+  {
+    // assume we are encrypting the maximum number possible
+    int bytes_to_encrypt = max_bytes;
+    if (bytes_to_encrypt > msg_end - msg_next)
+      bytes_to_encrypt = msg_end - msg_next;
+
+    // encrypt and store into enc_tmp
+    int enc_bytes = rsa_encrypt(enc_tmp, bytes_to_encrypt, msg_next, pubkey);
+
+    // if the number of encrypted bytes is too small, extend with zeros
+    if (enc_bytes < chunk_len)
+    {
+      char* zero_to_here = enc_next + (chunk_len - enc_bytes);
+      while (enc_next < zero_to_here)
+      {
+        *enc_next = '0';
+        enc_next++;
+      }
+    }
+
+    // copy enc_tmp into enc, then increment buffers
+    memcpy(enc_next, enc_tmp, enc_bytes);
+    enc_next += enc_bytes;
+    msg_next += bytes_to_encrypt;
+  }
+
+  // send encrypted message
   if (send_message(socket, enc, enc_next - enc) == -1)
   {
-    sprintf(stderr, "send_encrypted_message(): failed on call to send_message()\n");
+    fprintf(stderr, "send_encrypted_message(): failed on call to send_message()\n");
     return -1;
   }
 
