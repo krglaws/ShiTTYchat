@@ -1,49 +1,23 @@
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <server.h>
+#include <comm.h>
 #include <client_manager.h>
+
 
 static unsigned num_clients = 0;
 
 static client_entry_t* client_list = NULL;
 
 
-static int validate_connection_request(char msg_buffer, unsigned len);
-
-
 static int hand_shake(const int socket, const rsa_key_t server_key, rsa_key_t client_key)
 {
-  char *valid_out_request = "{ShiTTYchat-Version: " VERSION "; Connection-Request: OUT-sock}";
-  char *valid_in_request =  "{ShiTTYchat-Version: " VERSION "; Connection-Request: IN-sock}";
-
-  int len = strlen(valid_out_request);
-  char msg_buffer[len+1];
-  memset(msg_buffer, 0, len+1);
-
-  char* reject_msg = "{Connection-Request: rejected; Reason: message too long?}"
-  // we expect a short message from client with version info and connection type
-  if ((len = receive_message(socket, msg_buffer, len)) == -1)
-  {
-    send_message(socket, reject_msg, strlen(reject_msg));
-    fprintf(stderr, "exchange_keys(): invalid connection request: call to receive_message() failed.\n");
-    return -1;
-  }
-
-  char* accept_msg = "{Connection-Request: accepted}";
-  // compare request with valid OUT-sock request
-  if (strcmp(valid_out_request, msg_buffer) == 0)
-  {
-    // tell client request is accepted
-    send_message(socket, accept_msg, strlen(accept_msg));
-  }
-
-  // compare request with valid IN-sock request
-  else if (strcmp(valid_in_request, msg_buffer) == 0)
-  {
-    
-  }
-
-  fprintf(stderr, "exchange_keys(): invalid connection request message.\n");
-  return -1; 
+  // read in message from socket
+  char msg[MAX_MSG_LEN + 1];
+  int msg_len = receive_message(socket, msg, MAX_MSG_LEN);
 }
 
 
@@ -109,12 +83,6 @@ int add_client(const int socket, const char* ip, const rsa_key_t server_key)
 
 int remove_client(int socket)
 {
-  if (client_list == NULL)
-  {
-    fprintf(stderr, "remove_client(): client list is empty\n");
-    return -1;
-  }
-
   client_entry_t* iterator = client_list;
 
   // check if first entry is the one to be removed
