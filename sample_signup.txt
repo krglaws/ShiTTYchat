@@ -1,0 +1,74 @@
+
+CLIENT:
+-------
+SOCK: OUT\n
+EXP: alasdfs\n
+DIV: lklkhasdkf\n
+\n
+
+     |
+     V
+
+SERVER:
+-------
+UUID: asldfkjdssdf\n
+EXP: asdkjasf\n
+DIV: alkjaskflsdl\n
+\n
+
+     |
+     V
+
+CLIENT:
+-------
+UNAME: user1\n
+\n
+     |
+     V
+
+SERVER:
+-------
+OK\n
+\n
+
+     |
+     V
+
+CLIENT:   --->         CLIENT:
+-------                -------
+                       SOCK: IN\n
+                       UUID: asldfkjdssdf\n
+                       \n
+
+                            |
+                            V
+
+                       SERVER:
+                       -------
+                       OK\n
+                       \n
+
+                            |
+                            V
+
+CLIENT:      <---      CLIENT:
+-------                -------
+Hello!\n
+\n
+
+     |
+     V
+
+SERVER:   --->          SERVER:
+-------                 -------
+OK\n                    TIME: <time in UTC>\n
+\n                      UNAME: user1\n
+                        Hello!\n
+     |                  \n
+     V
+                             |
+CLIENT:                      V
+-------
+                        CLIENT:
+                        -------
+
