@@ -29,6 +29,7 @@ DIV: lklkhasdkf\n
 
 SERVER:
 -------
+BASE: 62\n
 EXP: asdkjasf\n
 DIV: alkjaskflsdl\n
 
