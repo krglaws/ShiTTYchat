@@ -8,10 +8,9 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
-#include <server.h>
 #include <rsa.h>
-#include <comm.h>
-
+#include <client_manager.h>
+#include <server.h>
 
 int main(int argc, char** argv)
 {
@@ -31,7 +30,7 @@ int main(int argc, char** argv)
 
   // set up server address
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = 420;
+  server_addr.sin_port = htons(420);
   inet_pton(AF_INET, "0.0.0.0", &(server_addr.sin_addr));
 
   // create server socket
@@ -58,7 +57,7 @@ int main(int argc, char** argv)
   // initialize client manager
   init_client_manager(server_fd);
 
-  printf("Listening on port %d...\n", ntohs(opts->server_port));
+  printf("Listening on port %d...\n", ntohs(server_addr.sin_port));
   while (1)
   {
     // keep track of highest socket value in socket set
@@ -97,17 +96,16 @@ int main(int argc, char** argv)
       printf("Connected to %s.\n", ip_str);
 
       // add new connection
-      add_client(client_fd, 
-
-      // set active socket to newly accepted client socket
-      active_fd = client_fd;
+      if (new_connection(client_fd, ip_str) == -1)
+        fprintf(stderr, "main(): call to new_connection() failed\n");
     }
 
     // otherwise, the active socket is already connected
     else
     {
-      // receive message, and then broadcast to other clients
-     
+      // handle incoming message from existing client
+      if (handle_client_message(active_fd, privkey) == -1)
+        fprintf(stderr, "main(): call to handle_client_message() failed\n");
     }
   }
 }
