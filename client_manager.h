@@ -19,7 +19,7 @@
 #define EXP_FLD_SZ 	64
 #define DIV_FLD_SZ 	64
 #define UUID_FLD_SZ	64
-#define UNAME_FLD_SZ	UNAMELEN
+#define UNAME_FLD_SZ	(UNAMELEN + 1)
 
 
 /* ------ Field Format Strings ----- */
@@ -28,6 +28,10 @@
 #define DIV_FMT		"DIV: %64s"
 #define UUID_FMT	"UUID: %64s"
 #define UNAME_FMT	"UNAME: %16s"
+
+
+// accept client response template
+#define ACCEPT_RESP_TMPLT "BASE: %d\nEXP: %s\nDIV: %s\n"
 
 
 // client entry linked list definition

@@ -72,15 +72,11 @@ static int broadcast(const char* uname, const char* msg)
   while (iterator)
   {
     // keep trying all of them, even if one fails
-    if (send_encrypted_message( iterator->socket,
-                                outgoing,
-                                strlen(outgoing),
-                                iterator->key) == -1)
+    if (send_encrypted_message(iterator->socket, outgoing, strlen(outgoing), iterator->key) == -1)
     {
       fprintf(stderr, "broadcast(): call to send_encrypted_message() failed\n");
       result = -1;
     }
-
     iterator = iterator->next_entry;
   }
 
@@ -297,10 +293,32 @@ int new_connection(const int socket, const char* ip)
   new_entry->key->b = base;
 
   memcpy(new_entry->ip, ip, strlen(ip));
-  memcpy(new_entry->key->e, exponent, strlen(exponent));
-  memcpy(new_entry->key->m, divisor, strlen(divisor));
 
-  // find end of list
+  new_entry->key->e = calloc(1, strlen(exponent) + 1);
+  new_entry->key->d = calloc(1, strlen(divisor) + 1);
+
+  memcpy(new_entry->key->e, exponent, strlen(exponent));
+  memcpy(new_entry->key->d, divisor, strlen(divisor));
+
+  // looks good. send server info (first entry contains server info)
+  char response[STD_MSG_LEN];
+  char* template = ACCEPT_RESP_TMPLT;
+  len = sprintf(response,
+          template,
+          base,
+          exponent,
+          divisor);
+
+  if (send_encrypted_message(socket, response, len, new_entry->key) == -1)
+  {
+    fprintf(stderr, "new_connection(): call to send_encrypted_message() failed\n");
+
+    rsa_clear_key(new_entry->key);
+    free(new_entry);
+    return -1;
+  }
+
+  // find end of client list
   client_entry_t* last = client_list;
   while (last->next_entry)
     last = last->next_entry;
@@ -311,7 +329,7 @@ int new_connection(const int socket, const char* ip)
   // increment client counter
   num_clients++;
 
-  return -1;
+  return 0;
 }
 
 
