@@ -58,7 +58,7 @@ int receive_encrypted_message(const int socket, char* msg, const unsigned msg_le
   char enc[MAX_MSG_LEN];
   char* enc_next = enc;
 
-  int chunk_size = strlen(privkey->m);
+  int chunk_size = strlen(privkey->d);
 
   // read in message from socket
   int received = receive_message(socket, enc, MAX_MSG_LEN);
@@ -155,7 +155,7 @@ int send_message(const int socket, const char* msg, const unsigned msg_len)
 int send_encrypted_message(const int socket, const char* msg, const unsigned msg_len, const rsa_key_t pubkey)
 {
   // chunk length == length of divisor in bytes 
-  int chunk_len = strlen(pubkey->m);
+  int chunk_len = strlen(pubkey->d);
 
   // max encryptable bytes (one or two bytes less than chunk_length)
   int max_bytes = rsa_max_bytes(pubkey);
@@ -182,8 +182,8 @@ int send_encrypted_message(const int socket, const char* msg, const unsigned msg
   char enc_tmp[chunk_len + 1];
 
   // keep track of next bytes to encrypt
-  char* msg_next = msg;
-  char* msg_end = msg + msg_len;
+  char* msg_next = (char*) msg;
+  char* msg_end = (char*) msg + msg_len;
 
   // while there are bytes left to encrypt
   while (msg_next < msg_end)
