@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <time.h>
+#include <gmp.h>
+#include <rsa.h>
 
 #include <server.h>
 #include <comm.h>
@@ -13,17 +17,9 @@ static unsigned num_clients = 0;
 static client_entry_t* client_list = NULL;
 
 
-static int hand_shake(const int socket, const rsa_key_t server_key, rsa_key_t client_key)
-{
-  // read in message from socket
-  char msg[MAX_MSG_LEN + 1];
-  int msg_len = receive_message(socket, msg, MAX_MSG_LEN);
-}
-
-
 /* this procedure is called only
    once at the start of the program */
-void init_client_manager(int server_socket)
+void init_client_manager(const int server_socket)
 {
   // create client_entry_t to hold server socket at very beginning of list
   client_list = malloc(sizeof(client_entry_t));
@@ -37,51 +33,289 @@ void init_client_manager(int server_socket)
 }
 
 
-int add_client(const int socket, const char* ip, const rsa_key_t server_key)
+/* retrieves a client with matching socket number */
+static client_entry_t* get_client_with_socket(int socket)
 {
-  // check if we are at max capacity
-  if (num_clients == MAXCLIENTS)
-  {
-    fprintf(stderr, "add_client(): at max client capacity\n");
-    return -1;
-  }
-
-  char uname[UNAMELEN];
-  rsa_key_t client_key;
-
-  // try to exchange keys. if something goes wrong, let exchange_keys() report it.
-  if (hand_shake(socket, server_key, client_key, uname) == -1)
-  {
-    fprintf(stderr, "add_client(): failed on call to hand_shake()\n");
-    return -1;
-  }
-
-  // allocate space for new client entry
-  client_entry_t* entry = malloc(sizeof(client_entry_t));
-
-  // fill in entry with client attributes
-  entry->socket = socket;
-  memcpy(entry->ip, ip, strlen(ip));
-  memcpy(entry->uname, uname, UNAMELEN);
-
-  entry->key->m = client_key->m;
-  entry->key->e = client_key->e;
-  entry->key->b = client_key->b;
-
-  entry->next_entry = NULL;
-
-  // find end of client entry list and append new client entry
   client_entry_t* iterator = client_list;
-  while (iterator->next_entry != NULL)
-    iterator = iterator->next_entry;
 
-  iterator->next_entry = entry;
+  while (iterator)
+  {
+    if (iterator->socket == socket)
+      return iterator;
+  }
+
+  fprintf(stderr, "get_client_with_socket(): no client with socket number %d\n", socket);
+  return NULL;
+}
+
+
+/* called from handle_client_message() to send an incoming message from
+   one client to all other connected clients */
+static int broadcast(const char* uname, const char* msg)
+{
+  // generate timestamp
+  time_t curr_time;
+  struct tm* time_info;
+  char time_str[9];
+
+  time(&curr_time);
+  time_info = localtime(&curr_time);
+  strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
+
+  // generate broadcast message
+  char outgoing[MAX_MSG_LEN];
+  sprintf(outgoing, "UNAME: %s\nTIME: %s\nMESSAGE: %s\n", uname, time_str, outgoing);
+
+  int result = 0;
+  // broadcast (skip server entry)
+  client_entry_t* iterator = client_list->next_entry;
+  while (iterator)
+  {
+    // keep trying all of them, even if one fails
+    if (send_encrypted_message( iterator->socket,
+                                outgoing,
+                                strlen(outgoing),
+                                iterator->key) == -1)
+    {
+      fprintf(stderr, "broadcast(): call to send_encrypted_message() failed\n");
+      result = -1;
+    }
+
+    iterator = iterator->next_entry;
+  }
+
+  return result;
+}
+
+
+/* called from server.c to handle incoming 
+   messages from existing clients */
+int handle_client_message(const int socket, const rsa_key_t privkey)
+{
+  // retrieve client with this socket
+  client_entry_t* client = get_client_with_socket(socket);
+  if (client == NULL)
+  {
+    fprintf(stderr, "handle_client_message(): call to get_client_with_socket() failed\n");
+    return -1;
+  }
+
+  // read in message from client
+  char msg[MAX_MSG_LEN];
+  int len = receive_encrypted_message(socket, msg, MAX_MSG_LEN, privkey);
+
+  // check for error
+  if (len == -1)
+  {
+    fprintf(stderr, "handle_client_message(): call to receive_encrypted_message() failed\n");
+    return -1;
+  }
+
+  // check if client has disconnected
+  if (len == 0)
+  {
+    fprintf(stdout, "%s disconnected\n", client->ip);
+    if (remove_client(socket) == -1)
+    {
+      fprintf(stderr, "handle_client_message(): call to remove_client() failed\n");
+      return -1;
+    }
+    return 0;
+  }
+
+  if (broadcast(client->uname, msg) == -1)
+  {
+    fprintf(stderr, "handle_client_message(): call to broadcast() failed\n");
+    return -1;
+  }
 
   return 0;
 }
 
 
-int remove_client(int socket)
+/* called by new_connection() to check if user name
+   already exists */
+static int validate_uname(const char* uname)
+{
+  client_entry_t* iterator = client_list;
+
+  while (iterator)
+  {
+    if (strcmp(uname, iterator->uname) == 0)
+      return -1;
+
+    iterator = iterator->next_entry;
+  }
+
+  return 0;
+}
+
+
+int new_connection(const int socket, const char* ip)
+{
+  // check if we are at max capacity
+  if (num_clients == MAXCLIENTS)
+  {
+    fprintf(stderr, "new_connection(): at max client capacity\n");
+
+    char* err_resp = "At max capacity\n";
+    return -1;
+  }
+
+  // read message from new connection
+  char msg[STD_MSG_LEN];
+  int len = receive_message(socket, msg, STD_MSG_LEN);
+
+  // return if something went wrong while reading from socket
+  if (len == -1)
+  {
+    fprintf(stderr, "new_connection(): call to receive_message() failed\n");
+    return -1;
+  }
+
+  // check if UNAME field is present
+  char* field_ptr;
+  if ((field_ptr = strstr(msg, "UNAME: ")) == NULL)
+  {
+    fprintf(stderr, "new_connection(): request missing UNAME field\n");
+
+    char* err_resp = "Missing UNAME field\n";
+    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;    
+  }
+
+  // scan in UNAME
+  char uname[UNAME_FLD_SZ + 1];
+  sscanf(field_ptr, UNAME_FMT, uname);
+
+  // validate UNAME
+  if (validate_uname(uname) == -1)
+  {
+    fprintf(stderr, "new_connection(): request UNAME value is invalid\n");
+
+    char* err_resp = "Invalid UNAME value\n";
+    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;
+  }
+
+  // check if BASE field is present
+  if ((field_ptr = strstr(msg, "BASE: ")) == NULL)
+  {
+    fprintf(stderr, "new_connection(): request missing BASE field\n");
+
+    char* err_resp = "Missing BASE field\n";
+    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;
+  }
+
+  // scan in BASE
+  char base_str[BASE_FLD_SZ];
+  sscanf(field_ptr, BASE_FMT, base_str);
+  int base = strtol(base_str, NULL, 10);
+
+  // validate base
+  if (base < 2 || base > 62)
+  {
+    fprintf(stderr, "new_connection(): request contains invalid BASE value\n");
+
+    char* err_resp = "Invalid BASE value\n";
+    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;
+  }
+
+  // check if EXP field is present
+  if ((field_ptr = strstr(msg, "EXP: ")) == NULL)
+  {
+    fprintf(stderr, "new_connection(): request missing EXP field\n");
+
+    char* err_resp = "Missing EXP field\n";
+    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+     return -1;
+  }
+
+  // scan in EXP value
+  char exponent[EXP_FLD_SZ];
+  sscanf(field_ptr, EXP_FMT, exponent);
+
+  // validate exponent
+  mpz_t exp;
+  mpz_init(exp);
+  mpz_set_str(exp, exponent, base);
+  if (mpz_cmp_ui(exp, 0) == 0)
+  {
+    fprintf(stderr, "new_connection(): request contains invalid EXP value\n");
+
+    mpz_clear(exp);
+    char* err_resp = "Invalid EXP value\n";
+    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;
+  }
+  mpz_clear(exp);
+
+  // check if DIV field is present
+  if ((field_ptr = strstr(msg, "DIV: ")) == NULL)
+  {
+    fprintf(stderr, "new_connection(): request missing DIV field\n");
+
+    char* err_resp = "Missing DIV field\n";
+    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;
+  }
+
+  // scan in DIV value
+  char divisor[DIV_FLD_SZ];
+  sscanf(field_ptr, DIV_FMT, divisor);
+
+  // validate divisor
+  mpz_t div;
+  mpz_init(div);
+  mpz_set_str(div, divisor,  base);
+  if (mpz_cmp_ui(div, 0) == 0)
+  {
+    fprintf(stderr, "new_connection(): request contains invalid DIV value\n");
+
+    mpz_clear(div);
+    char* err_resp = "Invalid DIV value\n";
+    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;
+  }
+  mpz_clear(div);
+
+  // create new client and fill out entry
+  client_entry_t* new_entry = malloc(sizeof(client_entry_t));
+
+  new_entry->next_entry = NULL;
+  new_entry->socket = socket;
+  new_entry->key->b = base;
+
+  memcpy(new_entry->ip, ip, strlen(ip));
+  memcpy(new_entry->key->e, exponent, strlen(exponent));
+  memcpy(new_entry->key->m, divisor, strlen(divisor));
+
+  // find end of list
+  client_entry_t* last = client_list;
+  while (last->next_entry)
+    last = last->next_entry;
+
+  // append client entry
+  last->next_entry = new_entry;
+
+  // increment client counter
+  num_clients++;
+
+  return -1;
+}
+
+
+static int remove_client(const int socket)
 {
   client_entry_t* iterator = client_list;
 
@@ -104,7 +338,7 @@ int remove_client(int socket)
   // check if we have reached the end
   if (iterator->next_entry == NULL)
   {
-    fprintf(stderr, "remove_client(): no connection with socket %d exists in client list\n", socket);
+    fprintf(stderr, "remove_client(): socket %d does not exist in client list\n", socket);
     return -1;
   }
 
@@ -115,6 +349,12 @@ int remove_client(int socket)
   // free up old entry
   rsa_clear_key(deletethis->key);
   free(deletethis);
+
+  // close socket
+  close(socket);
+
+  // decrement client counter
+  num_clients--;
 
   return 0;
 }

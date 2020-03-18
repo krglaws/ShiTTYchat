@@ -1,66 +1,47 @@
 
 #ifndef _CLIENT_MANAGER_H_
-
-#ifndef _CLIENT_MANAGER_H_
 #define _CLIENT_MANAGER_H_
 
 
+/* ---------------- General Options --------------- */
 // the maximum number of clients allowed to connect
 #define MAXCLIENTS 10
 
+// maximum user name length
+#define UNAMELEN 16
 
-/* this includes NULL terminator, so really the maximum username length is 16.
-   When reading in the username from login, be sure to expect UNAMELEN-1. */
-#define UNAMELEN 17
+// maximum length of an IP
+#define IPSTRLEN 16
 
-// maximum length of an IP, plus NULL terminator
-#define IPSTRLEN 17
 
-typedef struct
+/* ------ Field String Container Sizes ----- */
+#define BASE_FLD_SZ	4
+#define EXP_FLD_SZ 	64
+#define DIV_FLD_SZ 	64
+#define UUID_FLD_SZ	64
+#define UNAME_FLD_SZ	UNAMELEN
+
+
+/* ------ Field Format Strings ----- */
+#define BASE_FMT	"BASE: %4s"
+#define EXP_FMT		"EXP: %64s"
+#define DIV_FMT		"DIV: %64s"
+#define UUID_FMT	"UUID: %64s"
+#define UNAME_FMT	"UNAME: %16s"
+
+
+// client entry linked list definition
+typedef struct __client_entry_struct client_entry_t;
+
+struct __client_entry_struct
 {
-  int out_sock;
-  int in_sock;
-  char ip[IPSTRLEN];
-  char uname[UNAMELEN];
-  char uuid[UUID_LEN];
+  int socket;
+  char ip[IPSTRLEN + 1]; // add one for NULL terminator
+  char uname[UNAMELEN + 1]; // add one for NULL terminator
   rsa_key_t key;
   client_entry_t* next_entry;
-} client_entry_t;
+};
 
-
-/*
- * handshake() steps:
- *
- * 1. client sends connection request
- *    - some way of indicating:
- *      a. that this is indeed a shittychat client trying to connect 
- *      b. whether this is the IN socket or the OUT socket
- *      example: "{ShiTTYchat-version: 0.0.1; Connection-Request: OUT-sock}"
- *
- * if this is OUT socket (which is the first one):
- *
- * 2. server validates connection request, and sends some sort of "accept" message
- * 
- * 3. client sends his public key
- *
- * -- from here on out, messages are encrypted --
- *
- * 4. server encrypts a message with client's key with the following info:
- *   - UUID to be passed back to server when client connects its IN socket
- *   - the server's public key
- *
- * 5. that's it, OUT socket is set up
- *
- * if this is IN socket (which is the second one): 
- *
- * 2. server validates connection request, sends some sort of "accept" message (plain text)
- *
- * 3. client sends message encrypted with server's key (during OUT socket setup) containing:
- *   - UUID, aaand i think thats it.
- *
- * 4. done. IN socket is setup
- */
-static int handshake(int socket, rsa_key_t key);
 
 
 /*
@@ -68,20 +49,50 @@ static int handshake(int socket, rsa_key_t key);
  * into the beginning of the client_list. That way it's socket number is present when get_active_fd()
  * is called (it checks all sockets, including sever socket for incoming connections).
  */
-void init_client_manager(int server_socket);
+void init_client_manager(const int server_socket);
 
 
 /*
- * adds a client's out_socket, ip, uname, uuid, and public key to the client_list
+ * broadcasts a message to all connected clients
  */
-int add_client(int socket, char* ip, rsa_key_t key);
+static int broadcast(const char* uname, const char* msg);
+
+
+/*
+ * handles incoming messages from logged in clients
+ */
+int handle_client_message(const int socket, const rsa_key_t privkey);
+
+
+/*
+ * validates usernames
+ */
+static int validate_uname(const char* uname);
+
+
+/*
+ * processes connection requests from new clients
+ */
+int new_connection(const int socket, const char* ip);
 
 
 /*
  * when a client disconnects from the server (i.e. it sends a message with 0 bytes on either socket)
  * this procedure is called to remove the client from client_list.
  */
-int remove_client(int socket);
+static int remove_client(const int socket);
+
+
+/*
+ * initializes the set of active sockets
+ */
+int initialize_fdset(fd_set* fds);
+
+
+/*
+ * retrieves the currently active socket from the socket set
+ */
+int get_active_fd(fd_set* fds);
 
 
 #endif
