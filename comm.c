@@ -9,7 +9,7 @@
 #include <comm.h>
 
 
-int receive_message(int socket, char* msg, unsigned msg_len)
+int receive_message(const int socket, char* msg, const unsigned msg_len)
 {
   int total = 0, received = 0, available = 0;
 
@@ -52,7 +52,7 @@ int receive_message(int socket, char* msg, unsigned msg_len)
  * message must be aligned with the 'chunk size' of the rsa key. That is,
  * received_bytes % chunk_size must be 0.
  */
-int receive_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t privkey)
+int receive_encrypted_message(const int socket, char* msg, const unsigned msg_len, const rsa_key_t privkey)
 {
   // temp buffer to hold encrypted message
   char enc[MAX_MSG_LEN];
@@ -122,7 +122,7 @@ int receive_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t
 }
 
 
-int send_message(int socket, char* msg, unsigned msg_len)
+int send_message(const int socket, const char* msg, const unsigned msg_len)
 {
   // Keep sending while total bytes sent is less than message length
   int total = 0, sent = 0;
@@ -152,7 +152,7 @@ int send_message(int socket, char* msg, unsigned msg_len)
  * be prepended with '0' characters so that it is the correct length when sent over
  * the network.
  */
-int send_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t pubkey)
+int send_encrypted_message(const int socket, const char* msg, const unsigned msg_len, const rsa_key_t pubkey)
 {
   // chunk length == length of divisor in bytes 
   int chunk_len = strlen(pubkey->m);

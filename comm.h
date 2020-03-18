@@ -3,15 +3,16 @@
 #define _COMM_H_
 
 // this should be >= RSA_KEY_LEN
-#define MAX_MSG_LEN (4 * 1024)
+#define STD_MSG_LEN (1024)
+#define MAX_MSG_LEN (STD_MSG_LEN * 4)
 
-int receive_message(int socket, char* msg, unsigned msg_len);
+int receive_message(const int socket, char* msg, const unsigned msg_len);
 
-int receive_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t privkey);
+int receive_encrypted_message(const int socket, char* msg, const unsigned msg_len, const rsa_key_t privkey);
 
-int send_message(int socket, char* msg, unsigned msg_len);
+int send_message(const int socket, const char* msg, const unsigned msg_len);
 
-int send_encrypted_message(int socket, char* msg, unsigned msg_len, rsa_key_t pubkey);
+int send_encrypted_message(const int socket, const char* msg, const unsigned msg_len, const rsa_key_t pubkey);
 
 
 #endif
