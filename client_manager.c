@@ -7,8 +7,8 @@
 #include <gmp.h>
 #include <rsa.h>
 
-#include <server.h>
 #include <comm.h>
+#include <server.h>
 #include <client_manager.h>
 
 
@@ -22,13 +22,13 @@ static client_entry_t* client_list = NULL;
 void init_client_manager(const int server_socket)
 {
   // create client_entry_t to hold server socket at very beginning of list
-  client_list = malloc(sizeof(client_entry_t));
-  char ip[IPSTRLEN] = "0.0.0.0";
+  client_list = calloc(1, sizeof(client_entry_t));
+  char ip[20] = "0.0.0.0";
   char uname[UNAMELEN] = "SERVER";
 
   // fill in full server entry except rsa key, no need for it to be here
   client_list->socket = server_socket;
-  memcpy(client_list->ip, ip, IPSTRLEN);
+  memcpy(client_list->ip, ip, 20);
   memcpy(client_list->uname, uname, UNAMELEN);
 }
 
@@ -42,6 +42,7 @@ static client_entry_t* get_client_with_socket(int socket)
   {
     if (iterator->socket == socket)
       return iterator;
+    iterator = iterator->next_entry;
   }
 
   fprintf(stderr, "get_client_with_socket(): no client with socket number %d\n", socket);
@@ -108,7 +109,7 @@ int handle_client_message(const int socket, const rsa_key_t privkey)
   }
 
   // check if client has disconnected
-  if (len == 0)
+  if (strcmp(msg, "DISCONNECT\n") == 0 || len == 0)
   {
     fprintf(stdout, "%s disconnected\n", client->ip);
     if (remove_client(socket) == -1)
@@ -416,6 +417,7 @@ int get_active_fd(fd_set* fds)
     int socket = iterator->socket;
     if (FD_ISSET(socket, fds))
       return socket;
+    iterator = iterator->next_entry;
   }
 
   fprintf(stderr, "get_active_fd(): could not find active socket\n");
