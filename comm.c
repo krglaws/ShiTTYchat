@@ -40,7 +40,7 @@ int receive_message(const int socket, char* msg, const unsigned msg_len)
       return -1;
     }
 
-  // when recv returns 0, remote is done sending
+  // loop while bytes are available
   } while (available > 0);
 
   return total;
