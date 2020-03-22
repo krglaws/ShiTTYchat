@@ -2,37 +2,7 @@
 #ifndef _CLIENT_MANAGER_H_
 #define _CLIENT_MANAGER_H_
 
-
-/* ---------------- General Options --------------- */
-// the maximum number of clients allowed to connect
-#define MAXCLIENTS 10
-
-// maximum user name length
-#define UNAMELEN 16
-
-// maximum length of an IP
-#define IPSTRLEN 16
-
-
-/* ------ Field String Container Sizes ----- */
-#define BASE_FLD_SZ	4
-#define EXP_FLD_SZ 	64
-#define DIV_FLD_SZ 	64
-#define UUID_FLD_SZ	64
-#define UNAME_FLD_SZ	(UNAMELEN + 1)
-
-
-/* ------ Field Format Strings ----- */
-#define BASE_FMT	"BASE: %4s"
-#define EXP_FMT		"EXP: %64s"
-#define DIV_FMT		"DIV: %64s"
-#define UUID_FMT	"UUID: %64s"
-#define UNAME_FMT	"UNAME: %16s"
-
-
-// accept client response template
 #define ACCEPT_RESP_TMPLT "BASE: %d\nEXP: %s\nDIV: %s\n"
-
 
 // client entry linked list definition
 typedef struct __client_entry_struct client_entry_t;
@@ -40,12 +10,11 @@ typedef struct __client_entry_struct client_entry_t;
 struct __client_entry_struct
 {
   int socket;
-  char ip[IPSTRLEN + 1]; // add one for NULL terminator
+  char ip[20];
   char uname[UNAMELEN + 1]; // add one for NULL terminator
   rsa_key_t key;
   client_entry_t* next_entry;
 };
-
 
 
 /*
