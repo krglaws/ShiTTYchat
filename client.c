@@ -24,7 +24,7 @@ int main()
   // specify server address
   struct sockaddr_in server_address;
   server_address.sin_family = AF_INET;
-  server_address.sin_port = htons(420);
+  server_address.sin_port = htons(421);
   server_address.sin_addr.s_addr = inet_addr("0.0.0.0");
 
   // create socket
@@ -66,6 +66,27 @@ int main()
   }
 
   printf("Server response:\n%s\n", handshake);
+
+  rsa_key_t servkey;
+
+  char* field_ptr = strstr(handshake, "BASE: ");
+  char parse_buff[2048];
+  sscanf(field_ptr, "BASE: %d\n", &servkey->b);
+
+  field_ptr = strstr(handshake, "EXP: ");
+  sscanf(field_ptr, "EXP: %s\n", parse_buff);
+  servkey->e = calloc(1, strlen(parse_buff) + 1);
+  memcpy(servkey->e, parse_buff, strlen(parse_buff));
+
+  field_ptr = strstr(handshake, "DIV: ");
+  sscanf(field_ptr, "DIV: %s\n", parse_buff);
+  servkey->d = calloc(1, strlen(parse_buff) + 1);
+  memcpy(servkey->d, parse_buff, strlen(parse_buff));
+
+  char* dis = "DISCONNECT\n";
+  send_encrypted_message(sock, dis, strlen(dis), servkey);
+
+  receive_message(sock, parse_buff, 2048);
 
   close(sock);
 
