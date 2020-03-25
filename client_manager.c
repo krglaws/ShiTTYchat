@@ -293,7 +293,7 @@ int new_connection(const int socket, const char* ip)
   new_entry->socket = socket;
   new_entry->key->b = base;
 
-  memcpy(new_entry->ip, ip, strlen(ip));
+  memcpy(new_entry->ip, ip, strlen(ip) + 1);
 
   new_entry->key->e = calloc(1, strlen(exponent) + 1);
   new_entry->key->d = calloc(1, strlen(divisor) + 1);
