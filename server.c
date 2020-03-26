@@ -96,7 +96,7 @@ int main(int argc, char** argv)
       printf("Connected to %s.\n", ip_str);
 
       // add new connection
-      if (new_connection(client_fd, ip_str) == -1)
+      if (new_connection(client_fd, ip_str, pubkey) == -1)
         fprintf(stderr, "main(): call to new_connection() failed\n");
     }
 

@@ -148,7 +148,7 @@ static int validate_uname(const char* uname)
 }
 
 
-int new_connection(const int socket, const char* ip)
+int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
 {
   // check if we are at max capacity
   if (num_clients == MAXCLIENTS)
@@ -301,15 +301,16 @@ int new_connection(const int socket, const char* ip)
   memcpy(new_entry->key->e, exponent, strlen(exponent));
   memcpy(new_entry->key->d, divisor, strlen(divisor));
 
-  // looks good. send server info (first entry contains server info)
+  // looks good. prepare server info
   char response[STD_MSG_LEN];
   char* template = ACCEPT_RESP_TMPLT;
   len = sprintf(response,
           template,
-          base,
-          exponent,
-          divisor);
+          pubkey->b,
+          pubkey->e,
+          pubkey->d);
 
+  // encrypt using client key, then send
   if (send_encrypted_message(socket, response, len, new_entry->key) == -1)
   {
     fprintf(stderr, "new_connection(): call to send_encrypted_message() failed\n");

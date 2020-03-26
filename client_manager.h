@@ -46,7 +46,7 @@ static int validate_uname(const char* uname);
 /*
  * processes connection requests from new clients
  */
-int new_connection(const int socket, const char* ip);
+int new_connection(const int socket, const char* ip, rsa_key_t pubkey);
 
 
 /*
