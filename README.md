@@ -1,3 +1,3 @@
-# ShiTTY Chat
+# ShiTTYchat
 
-A very bad command line chat application
+A barebones terminal chat room written in C.
