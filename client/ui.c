@@ -125,7 +125,16 @@ void submit_text(int len)
 
 void write_buff_to_win(WINDOW* win, char* buff)
 {
-	
+	int height, width, len, curx, cury;
+
+	getmaxyx(win, height, width);
+	height -= 2;
+	width -= 2;
+
+	curx =  
+
+	len = strlen(buff);
+
 }
 
 
