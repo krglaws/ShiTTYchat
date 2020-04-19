@@ -63,7 +63,18 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	/* perform handshake */
+	/* perform handshake with server */
+	if (handshake(rsa_t pubkey, rsa_t privkey, rsa_t servkey) == -1)
+	{
+		fprintf(stderr, "main(): failed on call to handshake()\n");
+		rsa_clear(pubkey);
+		rsa_clear(privkey);
+		return -1;
+	}
+	rsa_clear(pubkey);
+
+	/* start client */
+	return client_loop(sock, privkey, servkey);
 }
 
 
