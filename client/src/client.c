@@ -5,6 +5,7 @@
 #include <ncurses.h>
 
 #include <rsa.h>
+#include <comm.h>
 #include <ui.h>
 #include <client.h>
 
@@ -14,6 +15,7 @@ struct message_buffer
 	char *buffer;
 	int len;
 	int size;
+	int line;
 	pthreads_mutex_t lock;
 } msgbuff;
 
@@ -29,19 +31,17 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 	active = bot;
 
 	/* initialize message buffer struct */
-	msgbuff.size = MAX_MSG_LEN;
-	msgbuff.buffer = malloc(MAX_MSG_LEN + 1);
-	msgbuff.buffer[MAX_MSG_LEN] = 0;
+	msgbuff.size = MAXMSGLEN;
+	msgbuff.buffer = malloc(MAXMSGLEN + 1);
+	msgbuff.buffer[MAXMSGLEN] = 0;
 	msgbuff.len = 0;
+	msgbuff.line = 0;
 	Pthread_mutex_init(&msgbuff.lock);
 
 	/* buffer for sending messages */
 	char snd_buff[MAXMSGLEN + 1];
 	snd_buff[MAXMSGLEN] = 0;
 	int snd_buff_len = 0;
-
-	/* keep track of current scroll line for top window */
-	int currline = 0;
 
 	/* keep track of cursor location in bot window */
 	int cursor_index = 0;
@@ -62,7 +62,7 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 		else if (c == KEY_RESIZE)
 		{
 			terminal_resize(top, bot);
-			display_from_line(top, currline, rec_buff);
+			display_from_line(top, msgbuff.line, rec_buff);
 			display_from_line(bot, 0, snd_buff);
 		}
 
@@ -72,13 +72,13 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 			switch(c)
 			{
 			case KEY_UP:
-				currline -= currline == 0 ? 0 : 1;
-				display_from_line(top, currline, rec_buff);
+				msgbuff.line -= msgbuff.line == 0 ? 0 : 1;
+				display_from_line(top, msgbuff.line, rec_buff);
 				break;
 
 			case KEY_DOWN:
-				currline++;
-				display_from_line(top, currline, rec_buff);
+				msgbuff.line++;
+				display_from_line(top, msgbuff.line, rec_buff);
 				break;
 			}
 		}
@@ -118,7 +118,7 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 			memset(snd_buff, 0, MAXMSGLEN);
 
 			/* redraw both windows */
-			display_from_line(top, currline, rec_buff);
+			display_from_line(top, msgbuff.line, rec_buff);
 			display_from_line(bot, 0, snd_buff);
 		}
 
@@ -187,10 +187,11 @@ int incoming_message_handler(int sock, rsa_t privkey, WINDOW *win)
 		/* await messages from server */
 		bytes = receive_encrypted_message(sock, tmpbuf, MAXMSGLEN, privkey);
 
+		/* lock msgbuff */
 		Pthread_mutex_lock(&msgbuff.lock);
 
 		/* check if buffer resize is necessary */
-		if (bytes + msgbuff.len > MAXMSGLEN)
+		if (bytes + msgbuff.len + 1 > MAXMSGLEN)
 		{
 			msgbuff.size *= 2;
 			msgbuff.buffer = realloc(msgbuff.buffer, (msgbuff.size + 1));
@@ -199,10 +200,13 @@ int incoming_message_handler(int sock, rsa_t privkey, WINDOW *win)
 		/* append message onto msgbuff */
 		memcpy(msgbuff.buffer + msgbuff.len, tmpbuf, bytes);
 		msgbuff.len += bytes;
+		msgbuff.buffer[msgbuff.len++] = '\n';
 		msgbuff.buffer[msgbuff.len] = '\0';
 
 		/* redraw msgbuff */
 		display_from_line(win, msgbuff.line, msgbuff.buffer);
+
+		/* unlock msgbuff */
 		Pthread_mutex_unlock(&msgbuff.lock);
 	}
 }
