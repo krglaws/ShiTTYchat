@@ -1,8 +1,7 @@
-
-#include <pthreads.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <ncurses.h>
+#include <pthreads.h>
 
 #include <rsa.h>
 #include <comm.h>
@@ -10,41 +9,44 @@
 #include <client.h>
 
 
-struct message_buffer
-{
-	char *buffer;
-	int len;
-	int size;
-	int line;
-	pthreads_mutex_t lock;
-} msgbuff;
+static char *rec_buff;
+static int len;
+static int size;
+static int line;
+static int sock;
+static pthreads_mutex_t lock;
 
 
-int client_loop(int sock, rsa_t privkey, rsa_t servkey)
+int client_loop(int sock_fd, rsa_t privkey, rsa_t servkey)
 {
 	/* set up ncurses */
 	WINDOW *top, *bot, *active;
 	initscr();
 	init_windows(&top, &bot);
-
-	/* bottom window is active by default */
 	active = bot;
 
-	/* initialize message buffer struct */
-	msgbuff.size = MAXMSGLEN;
-	msgbuff.buffer = malloc(MAXMSGLEN + 1);
-	msgbuff.buffer[MAXMSGLEN] = 0;
-	msgbuff.len = 0;
-	msgbuff.line = 0;
-	Pthread_mutex_init(&msgbuff.lock);
+	if (init_shared_data() == -1)
+	{
+		fprintf(stderr, "client_loop(): failed on call to init_shared_data()\n");
+		return -1;
+	}
 
 	/* buffer for sending messages */
 	char snd_buff[MAXMSGLEN + 1];
 	snd_buff[MAXMSGLEN] = 0;
 	int snd_buff_len = 0;
-
-	/* keep track of cursor location in bot window */
 	int cursor_index = 0;
+ 
+	/* set up SIGCHLD handler */
+	if (signal(SIGCHLD, sigchld_handler) == -1)
+	{
+		perror("client_loop(): failed to set SIGCHLD handler");
+		return -1;
+	}
+
+	/* set up incoming message handler handler */
+	void* stack = malloc(1024*1024);
+	int pid = clone(incoming_message_handler, stack, 0, CLONE_FILES, NULL);
 
 	int c;
 	while ((c = wgetch(active)) != SIGQUIT)
@@ -62,7 +64,7 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 		else if (c == KEY_RESIZE)
 		{
 			terminal_resize(top, bot);
-			display_from_line(top, msgbuff.line, rec_buff);
+			display_from_line(top, line, rec_buff);
 			display_from_line(bot, 0, snd_buff);
 		}
 
@@ -72,18 +74,18 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 			switch(c)
 			{
 			case KEY_UP:
-				msgbuff.line -= msgbuff.line == 0 ? 0 : 1;
-				display_from_line(top, msgbuff.line, rec_buff);
+				line -= line == 0 ? 0 : 1;
+				display_from_line(top, line, rec_buff);
 				break;
 
 			case KEY_DOWN:
-				msgbuff.line++;
-				display_from_line(top, msgbuff.line, rec_buff);
+				line++;
+				display_from_line(top, line, rec_buff);
 				break;
 			}
 		}
 
-		/* we are using bottom windown */
+		/* we are using bottom window */
 		else if (c >= KEY_DOWN && c <= KEY_RIGHT)
 		{
 			cursor_index = move_cursor(bot,
@@ -98,27 +100,19 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 			cursor_index = 0;
 			wmove(bot, 1, 1);
 
-			/* check if rec_buff needs to be resized */
-			if (rec_buff_len + snd_buff_len + 3 > rec_buff_size)
+			/* send encrypted message */
+			if (send_encrypted_message(sock, snd_buff, snd_buff_len, servkey) == -1)
 			{
-				rec_buff_size *= 2;
-				rec_buff = realloc(rec_buff, rec_buff_size);
+				fprintf(stderr, "client_loop(): failed on call to send_encrypted_message()\n");
+				break;
 			}
-
-			/* append snd_buff to rec_buff */
-			memcpy(rec_buff+rec_buff_len, snd_buff, snd_buff_len+1);
-			rec_buff_len += snd_buff_len;
-
-			/* append new line chars */
-			rec_buff[rec_buff_len++] = '\n';
-			rec_buff[rec_buff_len++] = '\n';
 
 			/* clear snd_buff */
 			snd_buff_len = 0;
 			memset(snd_buff, 0, MAXMSGLEN);
 
 			/* redraw both windows */
-			display_from_line(top, msgbuff.line, rec_buff);
+			display_from_line(top, line, rec_buff);
 			display_from_line(bot, 0, snd_buff);
 		}
 
@@ -168,10 +162,35 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 		}
 	}
 
+	/* kill child */
+	kill(pid, SIGKILL);
+
 	endwin();
 	free(rec_buff);
 	rsa_clear(privkey);
 	rsa_clear(servkey);
+	close(sock);
+
+	return 0;
+}
+
+
+int init_shared_data()
+{
+	/* initialize shared data */
+	size = MAXMSGLEN;
+	buffer = malloc(MAXMSGLEN + 1);
+	buffer[MAXMSGLEN] = 0;
+	len = 0;
+	line = 0;
+	sock = sock_fd;
+
+	if (int err = pthread_mutex_init(&lock))
+	{
+		errno = err;
+		perror("init_shared_data()");
+		return -1;
+	}
 
 	return 0;
 }
@@ -180,35 +199,40 @@ int client_loop(int sock, rsa_t privkey, rsa_t servkey)
 int incoming_message_handler(int sock, rsa_t privkey, WINDOW *win)
 {
 	int bytes;
-	char tmpbuf[MAXMSGLEN];
+	char tmp_buff[MAXMSGLEN];
 
 	while (1)
 	{
 		/* await messages from server */
-		bytes = receive_encrypted_message(sock, tmpbuf, MAXMSGLEN, privkey);
+		bytes = receive_encrypted_message(sock, tmp_buff, MAXMSGLEN, privkey);
 
-		/* lock msgbuff */
-		Pthread_mutex_lock(&msgbuff.lock);
+		/* lock shared data */
+		pthread_mutex_lock(&lock);
 
 		/* check if buffer resize is necessary */
-		if (bytes + msgbuff.len + 1 > MAXMSGLEN)
+		if (bytes + len + 1 > MAXMSGLEN)
 		{
-			msgbuff.size *= 2;
-			msgbuff.buffer = realloc(msgbuff.buffer, (msgbuff.size + 1));
+			size *= 2;
+			buffer = realloc(buffer, (size + 1));
 		}
 
-		/* append message onto msgbuff */
-		memcpy(msgbuff.buffer + msgbuff.len, tmpbuf, bytes);
-		msgbuff.len += bytes;
-		msgbuff.buffer[msgbuff.len++] = '\n';
-		msgbuff.buffer[msgbuff.len] = '\0';
+		/* append message onto rec_buff */
+		memcpy(buffer + len, tmp_buff, bytes);
+		len += bytes;
+		buffer[len++] = '\n';
+		buffer[len] = '\0';
 
-		/* redraw msgbuff */
-		display_from_line(win, msgbuff.line, msgbuff.buffer);
+		/* redraw top window */
+		display_from_line(win, line, buffer);
 
-		/* unlock msgbuff */
-		Pthread_mutex_unlock(&msgbuff.lock);
+		/* unlock shared data */
+		pthread_mutex_unlock(&lock);
 	}
 }
 
+
+int sigchld_handler()
+{
+  exit();
+}
 
