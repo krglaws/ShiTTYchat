@@ -212,7 +212,7 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
 	}
 
 	/* kill child */
-	signal(SIGCHLD, NULL);
+	signal(SIGCHLD, SIG_IGN);
 	kill(pid, SIGKILL);
 
 	endwin();
@@ -227,6 +227,8 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
 
 int incoming_message_handler(void *args)
 {
+	signal(SIGWINCH, SIG_IGN);
+
 	int bytes;
 	char tmp_buff[MAXMSGLEN];
 
