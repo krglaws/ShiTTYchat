@@ -2,11 +2,15 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <arpa/inet.h>
 
 #include <rsa.h>
 #include <comm.h>
+#include <client.h>
+#include <init.h>
 
 
 int main(int argc, char **argv)
@@ -17,7 +21,7 @@ int main(int argc, char **argv)
 
 	/* get args */
 	int c;
-	while ((c = getopt(argc, argv, "u:s:p:")) != -1)
+	while ((c = getopt(argc, argv, "u:i:p:")) != -1)
 	{
 		switch (c)
 		{
@@ -50,7 +54,7 @@ int main(int argc, char **argv)
 	}
 
 	/* generate rsa keys */
-	rsa_key_t pubkey, privkey;
+	rsa_key_t pubkey, privkey, servkey;
 	rsa_init(pubkey, privkey, 1024, 62);
 
 	/* connect to server */
@@ -58,20 +62,20 @@ int main(int argc, char **argv)
 	if ((sock = connect_to_server(ip, uname, port)) == -1)
 	{
 		fprintf(stderr, "main(): failed on call to connect_to_server()\n");
-		rsa_clear(pubkey);
-		rsa_clear(privkey);
+		rsa_clear_key(pubkey);
+		rsa_clear_key(privkey);
 		return -1;
 	}
 
 	/* perform handshake with server */
-	if (handshake(rsa_t pubkey, rsa_t privkey, rsa_t servkey) == -1)
+	if (handshake(sock, uname, pubkey, privkey, servkey) == -1)
 	{
 		fprintf(stderr, "main(): failed on call to handshake()\n");
-		rsa_clear(pubkey);
-		rsa_clear(privkey);
+		rsa_clear_key(pubkey);
+		rsa_clear_key(privkey);
 		return -1;
 	}
-	rsa_clear(pubkey);
+	rsa_clear_key(pubkey);
 
 	/* start client */
 	return client_loop(sock, privkey, servkey);
@@ -92,7 +96,7 @@ bool valid_uname(char *uname)
 		char curr = uname[i];
 		if (!isprint(curr) || isspace(curr) || ispunct(curr))
 		{
-			fprintf(stderr, "username contains invalid characters\n");
+			fprintf(stderr, "user name contains invalid characters\n");
 			return false;
 		}
 	}
@@ -133,7 +137,7 @@ bool valid_port(char *port)
 
 void usage(char *name)
 {
-	fprintf(stderr, "usage: %s -u <username> -i <ip> [-p <port>]\n", name);
+	fprintf(stderr, "usage: %s -u <user name> -i <ip> [-p <port>]\n", name);
 }
 
 
@@ -149,7 +153,7 @@ int connect_to_server(char *ip, char *uname, char *port)
 	/* set up server address */
 	struct sockaddr_in server_address;
 	server_address.sin_family = AF_INET;
-	server_address.sin_port = htons(port);
+	server_address.sin_port = htons(iport);
 	server_address.sin_addr.s_addr = inet_addr(ip);
 
 	/* create socket */
@@ -171,18 +175,18 @@ int connect_to_server(char *ip, char *uname, char *port)
 }
 
 
-int handshake(rsa_t pubkey, rsa_t privkey, rsa_t servkey)
+int handshake(int sock, char *uname, rsa_key_t pubkey, rsa_key_t privkey, rsa_key_t servkey)
 {
 	/* prepare client info */
-	char* template = "UNAME: user1\nBASE: 62\nEXP: %s\nDIV: %s\n";
+	char* template = "UNAME: %s\nBASE: %d\nEXP: %s\nDIV: %s\n";
 	char handshake[MAX_MSG_LEN];
-	sprintf(handshake, template, pubkey->e, pubkey->d);
+	sprintf(handshake, template, uname, pubkey->b, pubkey->e, pubkey->d);
 
 	/* send info */
 	send_message(sock, handshake, strlen(handshake));
 
 	/* get server response */
-	if (receive_encrypted_message(sock, handshake, MAX_MSG_LEN, priv) == -1)
+	if (receive_encrypted_message(sock, handshake, MAX_MSG_LEN, privkey) == -1)
 	{
 		fprintf(stderr, "handshake(): failed on call to receive_encrypted_message()\n");
 		return -1;

@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <rsa.h>
 
+#define UNAMELEN 16
+
 bool valid_uname(char *uname);
 
 bool valid_ip(char *ip);
@@ -15,7 +17,7 @@ void usage(char* name);
 
 int connect_to_server(char *ip, char *uname, char *port);
 
-int handshake(rsa_t pubkey, rsa_t privkey, rsa_t servkey);
+int handshake(int sock, char *uname, rsa_key_t pubkey, rsa_key_t privkey, rsa_key_t servkey);
 
 #endif
 

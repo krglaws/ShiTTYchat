@@ -65,7 +65,7 @@ static int broadcast(const char* uname, const char* msg)
 
   // generate broadcast message
   char outgoing[MAX_MSG_LEN];
-  sprintf(outgoing, "UNAME: %s\nTIME: %s\nMESSAGE: %s\n", uname, time_str, outgoing);
+  sprintf(outgoing, "(%s) %s: %s\n", time_str, uname, msg);
 
   int result = 0;
   // broadcast (skip server entry)
@@ -111,7 +111,7 @@ int handle_client_message(const int socket, const rsa_key_t privkey)
   // check if client has disconnected
   if (strcmp(msg, "DISCONNECT\n") == 0 || len == 0)
   {
-    fprintf(stdout, "%s disconnected\n", client->ip);
+    fprintf(stdout, "%s disconnected\n", client->uname);
     if (remove_client(socket) == -1)
     {
       fprintf(stderr, "handle_client_message(): call to remove_client() failed\n");
@@ -294,6 +294,7 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
   new_entry->key->b = base;
 
   memcpy(new_entry->ip, ip, strlen(ip) + 1);
+  memcpy(new_entry->uname, uname, strlen(uname) + 1);
 
   new_entry->key->e = calloc(1, strlen(exponent) + 1);
   new_entry->key->d = calloc(1, strlen(divisor) + 1);
@@ -330,6 +331,8 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
 
   // increment client counter
   num_clients++;
+
+  printf("User %s joined the chat\n", uname);
 
   return 0;
 }

@@ -30,7 +30,7 @@ int main(int argc, char** argv)
 
   // set up server address
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(421);
+  server_addr.sin_port = htons(420);
   inet_pton(AF_INET, "0.0.0.0", &(server_addr.sin_addr));
 
   // create server socket
