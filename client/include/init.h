@@ -2,9 +2,6 @@
 #ifndef _INIT_H_
 #define _INIT_H_
 
-#include <stdbool.h>
-#include <rsa.h>
-
 #define UNAMELEN 16
 
 bool valid_uname(char *uname);

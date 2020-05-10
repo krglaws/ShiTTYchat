@@ -2,8 +2,6 @@
 #ifndef _UI_H_
 #define _UI_H_
 
-#include <ncurses.h>
-
 
 #define MAXMSGLEN (256)
 
