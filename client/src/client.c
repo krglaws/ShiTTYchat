@@ -56,9 +56,9 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
 
 	/* variables for sending messages */
 	char snd_buff[MAXMSGLEN + 1];
-	snd_buff[MAXMSGLEN] = 0;
 	int snd_buff_len = 0;
 	int cursor_index = 0;
+	memset(snd_buff, 0, MAXMSGLEN + 0);
  
 	/* set up SIGCHLD handler */
 	if (signal(SIGCHLD, &sigchld_handler) == SIG_ERR)
