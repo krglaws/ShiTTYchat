@@ -328,11 +328,18 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
 
   // append client entry
   last->next_entry = new_entry;
-
-  // increment client counter
   num_clients++;
 
-  printf("User %s joined the chat\n", uname);
+  // notify chat
+  template = "%s joined the chat\n";
+  char joinmsg[strlen(template) + strlen(uname)];
+  sprintf(joinmsg, template, uname);
+
+  if (broadcast("SERVER", joinmsg) == -1)
+  {
+    fprintf(stderr, "new_connection(): call to broadcast() failed\n");
+    return -1;
+  }
 
   return 0;
 }
@@ -368,6 +375,12 @@ static int remove_client(const int socket)
   // save next entry, set pointer to next entry to next next entry
   client_entry_t* deletethis = iterator->next_entry;
   iterator->next_entry = deletethis->next_entry;
+
+  // notify chat
+  char *template = "%s left the chat\n";
+  char leavemsg[strlen(template) + strlen(deletethis->uname)];
+  sprintf(leavemsg, template, deletethis->uname);
+  broadcast("SERVER", leavemsg);
 
   // free up old entry
   rsa_clear_key(deletethis->key);

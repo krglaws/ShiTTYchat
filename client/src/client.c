@@ -212,10 +212,15 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
     }
   }
 
-  /* kill child */
+  /* send disconnection message */
+  char *dis = "DISCONNECT\n";
+  send_encrypted_message(sock, dis, strlen(dis), servkey);
+
+  /* kill listener thread */
   signal(SIGCHLD, SIG_IGN);
   kill(pid, SIGKILL);
 
+  /* cleanup and quit */
   endwin();
   free(rec_buff);
   rsa_clear_key(privkey);
