@@ -331,7 +331,7 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
   num_clients++;
 
   // notify chat
-  template = "%s joined the chat\n";
+  template = "%s joined the chat";
   char joinmsg[strlen(template) + strlen(uname)];
   sprintf(joinmsg, template, uname);
 
@@ -377,7 +377,7 @@ static int remove_client(const int socket)
   iterator->next_entry = deletethis->next_entry;
 
   // notify chat
-  char *template = "%s left the chat\n";
+  char *template = "%s left the chat";
   char leavemsg[strlen(template) + strlen(deletethis->uname)];
   sprintf(leavemsg, template, deletethis->uname);
   broadcast("SERVER", leavemsg);
