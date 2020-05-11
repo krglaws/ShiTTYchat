@@ -2,8 +2,6 @@
 #ifndef _INIT_H_
 #define _INIT_H_
 
-#define UNAMELEN 16
-
 bool valid_uname(char *uname);
 
 bool valid_ip(char *ip);

@@ -14,10 +14,12 @@
 #include <ui.h>
 #include <client.h>
 
+#include <settings.h>
+
 
 char *rec_buff;
 int rec_buff_len;
-int size;
+int rec_buff_size;
 int line;
 int sock;
 WINDOW *win;
@@ -34,7 +36,7 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
   active = bot;
 
   /* initialize shared data */
-  size = MAXMSGLEN;
+  rec_buff_size = MAXMSGLEN;
   rec_buff = malloc(MAXMSGLEN + 1);
   rec_buff[MAXMSGLEN] = 0;
   rec_buff_len = 0;
@@ -55,7 +57,7 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
   }
 
   /* variables for sending messages */
-  char snd_buff[MAXMSGLEN + 1];
+  char snd_buff[MAXMSGLEN+1];
   int snd_buff_len = 0;
   int cursor_index = 0;
   memset(snd_buff, 0, MAXMSGLEN + 0);
@@ -233,15 +235,18 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
 
 int incoming_message_handler(void *args)
 {
+  /* prevent listener thread from crashing on window resize */
   signal(SIGWINCH, SIG_IGN);
 
+  /* allocate space for time + name + msg */
   int bytes;
-  char tmp_buff[MAXMSGLEN];
+  int bufflen = MAXMSGLEN + UNAMELEN + 32;
+  char tmp_buff[bufflen];
 
   while (1)
   {
     /* await messages from server */
-    bytes = receive_encrypted_message(sock, tmp_buff, MAXMSGLEN, key);
+    bytes = receive_encrypted_message(sock, tmp_buff, bufflen, key);
 
     if (bytes == -1)
     {
@@ -253,10 +258,10 @@ int incoming_message_handler(void *args)
     pthread_mutex_lock(&lock);
 
     /* check if buffer resize is necessary */
-    if (bytes + rec_buff_len + 1 > MAXMSGLEN)
+    if (bytes + rec_buff_len + 1 > bufflen)
     {
-      size *= 2;
-      rec_buff = realloc(rec_buff, (size + 1));
+      rec_buff_size *= 2;
+      rec_buff = realloc(rec_buff, (rec_buff_size + 1));
     }
 
     /* append message onto rec_buff */

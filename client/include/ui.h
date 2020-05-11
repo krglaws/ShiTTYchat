@@ -2,11 +2,7 @@
 #ifndef _UI_H_
 #define _UI_H_
 
-
-#define MAXMSGLEN (256)
-
 #define CTRL(x) ((x) & (0x1f))
-
 
 void terminal_resize(WINDOW *top, WINDOW *bot);
 

@@ -1,7 +1,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 #include <ncurses.h>
 
 #include <ui.h>

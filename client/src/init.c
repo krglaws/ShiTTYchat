@@ -12,6 +12,8 @@
 #include <client.h>
 #include <init.h>
 
+#include <settings.h>
+
 
 int main(int argc, char **argv)
 {
@@ -55,7 +57,7 @@ int main(int argc, char **argv)
 
   /* generate rsa keys */
   rsa_key_t pubkey, privkey, servkey;
-  rsa_init(pubkey, privkey, 1024, 62);
+  rsa_init(pubkey, privkey, RSAKEYLEN, RSAKEYENC);
 
   /* connect to server */
   int sock;
@@ -77,8 +79,8 @@ int main(int argc, char **argv)
   }
   rsa_clear_key(pubkey);
 
-  /* start client */
-  return client_loop(sock, privkey, servkey);
+  /* start client (never returns) */
+  client_loop(sock, privkey, servkey);
 }
 
 
@@ -87,7 +89,7 @@ bool valid_uname(char *uname)
   int len = strlen(uname);
   if (len > UNAMELEN)
   {
-    fprintf(stderr, "user name too long (16 characters maximum)\n");
+    fprintf(stderr, "user name too long (%d characters maximum)\n", UNAMELEN);
     return false;
   }
 
@@ -179,14 +181,18 @@ int handshake(int sock, char *uname, rsa_key_t pubkey, rsa_key_t privkey, rsa_ke
 {
   /* prepare client info */
   char* template = "UNAME: %s\nBASE: %d\nEXP: %s\nDIV: %s\n";
-  char handshake[MAX_MSG_LEN];
-  sprintf(handshake, template, uname, pubkey->b, pubkey->e, pubkey->d);
+
+  int bufflen = 512;
+  char msgbuff[bufflen];
+  memset(msgbuff, 0, bufflen);
+
+  sprintf(msgbuff, template, uname, pubkey->b, pubkey->e, pubkey->d);
 
   /* send info */
-  send_message(sock, handshake, strlen(handshake));
+  send_message(sock, msgbuff, strlen(msgbuff));
 
   /* get server response */
-  if (receive_encrypted_message(sock, handshake, MAX_MSG_LEN, privkey) == -1)
+  if (receive_encrypted_message(sock, msgbuff, bufflen-1, privkey) == -1)
   {
     fprintf(stderr, "handshake(): failed on call to receive_encrypted_message()\n");
     return -1;
@@ -197,14 +203,14 @@ int handshake(int sock, char *uname, rsa_key_t pubkey, rsa_key_t privkey, rsa_ke
   char parse_buff[MAX_MSG_LEN];
   int len;
 
-  if ((field_ptr = strstr(handshake, "BASE: ")) == NULL)
+  if ((field_ptr = strstr(msgbuff, "BASE: ")) == NULL)
   {
     fprintf(stderr, "handshake(): server response missing BASE field\n");
     return -1;
   }
   sscanf(field_ptr, "BASE: %d\n", &servkey->b);
 
-  if ((field_ptr = strstr(handshake, "EXP: ")) == NULL)
+  if ((field_ptr = strstr(msgbuff, "EXP: ")) == NULL)
   {
     fprintf(stderr, "handshake(): server response missing EXP field\n");
     return -1;
@@ -215,7 +221,7 @@ int handshake(int sock, char *uname, rsa_key_t pubkey, rsa_key_t privkey, rsa_ke
   memcpy(servkey->e, parse_buff, len);
   servkey->e[len] = '\0';
 
-  if ((field_ptr = strstr(handshake, "DIV: ")) == NULL)
+  if ((field_ptr = strstr(msgbuff, "DIV: ")) == NULL)
   {
     fprintf(stderr, "handshake(): server response missing DIV field\n");
     return -1;
