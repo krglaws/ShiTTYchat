@@ -36,9 +36,9 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
   active = bot;
 
   /* initialize shared data */
-  rec_buff_size = MAXMSGLEN;
   rec_buff = malloc(MAXMSGLEN + 1);
   rec_buff[MAXMSGLEN] = 0;
+  rec_buff_size = MAXMSGLEN;
   rec_buff_len = 0;
   line = 0;
   sock = sock_fd;
@@ -257,8 +257,8 @@ int incoming_message_handler(void *args)
     /* lock shared data */
     pthread_mutex_lock(&lock);
 
-    /* check if buffer resize is necessary */
-    if (bytes + rec_buff_len + 1 > bufflen)
+    /* check if buffer resize is necessary (+1 to acct for \n) */
+    if (bytes + rec_buff_len + 1 > rec_buff_size)
     {
       rec_buff_size *= 2;
       rec_buff = realloc(rec_buff, (rec_buff_size + 1));
