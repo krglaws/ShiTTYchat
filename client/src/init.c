@@ -39,7 +39,16 @@ int main(int argc, char **argv)
     case '?':
       usage(argv[0]);
       return -1;
+    default:
+      abort();
     }
+  }
+
+  if (optind < argc && argv[optind])
+  {
+    fprintf(stderr, "%s: unknown argument -- '%s'\n", argv[0], argv[optind]);
+    usage(argv[0]);
+    return -1;
   }
 
   /* check if essential args are NULL */
