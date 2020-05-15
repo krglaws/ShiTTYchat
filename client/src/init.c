@@ -155,7 +155,7 @@ void usage(char *name)
 int connect_to_server(char *ip, char *uname, char *port)
 {
   /* figure out port number */
-  int iport = 420; // default
+  int iport = DEFAULT_PORT; // default
   if (port != NULL)
   {
     iport = strtol(port, NULL, 10);
@@ -207,9 +207,16 @@ int handshake(int sock, char *uname, rsa_key_t pubkey, rsa_key_t privkey, rsa_ke
     return -1;
   }
 
+  /* check if server is at max capacity */
+  if (strcmp(msgbuff, "Server at max capacity\n") == 0)
+  {
+    fprintf(stderr, "handshake(): server at max capacity\n");
+    return -1;
+  }
+
   /* parse server info */
   char *field_ptr;
-  char parse_buff[MAX_MSG_LEN];
+  char parse_buff[RECVBUFFLEN];
   int len;
 
   if ((field_ptr = strstr(msgbuff, "BASE: ")) == NULL)

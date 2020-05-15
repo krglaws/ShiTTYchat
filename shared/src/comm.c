@@ -6,6 +6,7 @@
 #include <sys/ioctl.h>
 #include <rsa.h>
 
+#include <settings.h>
 #include <comm.h>
 
 
@@ -55,13 +56,13 @@ int receive_message(const int socket, char* msg, const unsigned msg_len)
 int receive_encrypted_message(const int socket, char* msg, const unsigned msg_len, const rsa_key_t privkey)
 {
   // temp buffer to hold encrypted message
-  char enc[MAX_MSG_LEN];
+  char enc[RECVBUFFLEN];
   char* enc_next = enc;
 
   int chunk_size = strlen(privkey->d);
 
   // read in message from socket
-  int received = receive_message(socket, enc, MAX_MSG_LEN);
+  int received = receive_message(socket, enc, RECVBUFFLEN);
 
   // find end of encrypted message
   char* enc_end = enc + received;
@@ -165,18 +166,18 @@ int send_encrypted_message(const int socket, const char* msg, const unsigned msg
   num_chunks += msg_len % chunk_len ? 1 : 0;
 
   // check if msg is too long
-  if (num_chunks * chunk_len > MAX_MSG_LEN)
+  if (num_chunks * chunk_len > RECVBUFFLEN)
   {
     fprintf(stderr, "send_encrypted_message(): message too long\n");
     return -1;
   }
 
   // encryption buffer
-  char enc[MAX_MSG_LEN + 1];
+  char enc[RECVBUFFLEN + 1];
 
   // keep track of where next bytes should be stored
   char* enc_next = enc;
-  char* enc_end = enc + MAX_MSG_LEN;
+  char* enc_end = enc + RECVBUFFLEN;
 
   // temporary encryption buffer
   char enc_tmp[chunk_len + 1];

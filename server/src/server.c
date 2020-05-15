@@ -171,7 +171,7 @@ int server(char *port_str)
 
       // add new connection
       if (new_connection(client_fd, ip_str, pubkey) == -1)
-        fprintf(stderr, "main(): call to new_connection() failed\n");
+        fprintf(stderr, "server(): call to new_connection() failed\n");
     }
 
     // otherwise, the active socket is already connected
@@ -179,7 +179,7 @@ int server(char *port_str)
     {
       // handle incoming message from existing client
       if (handle_client_message(active_fd, privkey) == -1)
-        fprintf(stderr, "main(): call to handle_client_message() failed\n");
+        fprintf(stderr, "server(): call to handle_client_message() failed\n");
     }
   }
 }

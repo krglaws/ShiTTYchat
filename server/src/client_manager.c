@@ -66,7 +66,7 @@ static int broadcast(const char* uname, const char* msg)
   strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
 
   // generate broadcast message
-  char outgoing[MAX_MSG_LEN];
+  char outgoing[BROADCASTLEN];
   sprintf(outgoing, "(%s) %s: %s\n", time_str, uname, msg);
 
   int result = 0;
@@ -100,8 +100,9 @@ int handle_client_message(const int socket, const rsa_key_t privkey)
   }
 
   // read in message from client
-  char msg[MAX_MSG_LEN];
-  int len = receive_encrypted_message(socket, msg, MAX_MSG_LEN, privkey);
+  char msg[MAXMSGLEN + 1];
+  memset(msg, 0, MAXMSGLEN);
+  int len = receive_encrypted_message(socket, msg, MAXMSGLEN, privkey);
 
   // check for error
   if (len == -1)
@@ -152,18 +153,10 @@ static int validate_uname(const char* uname)
 
 int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
 {
-  // check if we are at max capacity
-  if (num_clients == MAXCLIENTS)
-  {
-    fprintf(stderr, "new_connection(): at max client capacity\n");
-
-    char* err_resp = "At max capacity\n";
-    return -1;
-  }
-
   // read message from new connection
-  char msg[STD_MSG_LEN];
-  int len = receive_message(socket, msg, STD_MSG_LEN);
+  char msg[RECVBUFFLEN + 1];
+  memset(msg, 0, RECVBUFFLEN + 1);
+  int len = receive_message(socket, msg, RECVBUFFLEN);
 
   // return if something went wrong while reading from socket
   if (len == -1)
@@ -199,6 +192,8 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
     return -1;
   }
 
+  rsa_key_t client_key;  
+
   // check if BASE field is present
   if ((field_ptr = strstr(msg, "BASE: ")) == NULL)
   {
@@ -225,6 +220,8 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
       fprintf(stderr, "new_connection(): failed to send error response\n");
     return -1;
   }
+
+  client_key->b = base;
 
   // check if EXP field is present
   if ((field_ptr = strstr(msg, "EXP: ")) == NULL)
@@ -257,6 +254,8 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
   }
   mpz_clear(exp);
 
+  client_key->e = exponent;
+
   // check if DIV field is present
   if ((field_ptr = strstr(msg, "DIV: ")) == NULL)
   {
@@ -288,6 +287,18 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
   }
   mpz_clear(div);
 
+  client_key->d = divisor;
+
+  // check if we are at max capacity
+  if (num_clients == MAXCLIENTS)
+  {
+    fprintf(stderr, "new_connection(): server at max client capacity\n");
+
+    char* err_resp = "Server at max capacity\n";
+    send_encrypted_message(socket, err_resp, strlen(err_resp), client_key);
+    return -1;
+  }
+
   // create new client and fill out entry
   client_entry_t* new_entry = malloc(sizeof(client_entry_t));
 
@@ -305,7 +316,7 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
   memcpy(new_entry->key->d, divisor, strlen(divisor));
 
   // looks good. prepare server info
-  char response[STD_MSG_LEN];
+  char response[RECVBUFFLEN];
   char* template = ACCEPT_RESP_TMPLT;
   len = sprintf(response,
           template,
@@ -342,6 +353,7 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
     fprintf(stderr, "new_connection(): call to broadcast() failed\n");
     return -1;
   }
+  printf("%s\n", joinmsg);
 
   return 0;
 }

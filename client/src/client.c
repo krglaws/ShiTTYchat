@@ -240,7 +240,7 @@ int incoming_message_handler(void *args)
 
   /* allocate space for time + name + msg */
   int bytes;
-  int bufflen = MAXMSGLEN + UNAMELEN + 32;
+  int bufflen = BROADCASTLEN;
   char tmp_buff[bufflen];
 
   while (1)

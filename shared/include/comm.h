@@ -5,14 +5,14 @@
 /* ---------------- General Options --------------- */
 
 // this should be >= RSA_KEY_LEN
-#define STD_MSG_LEN (1024)
-#define MAX_MSG_LEN (STD_MSG_LEN * 4)
+//#define STD_MSG_LEN (1024)
+//#define MAX_MSG_LEN (STD_MSG_LEN * 4)
 
 
 /* ------ Field String Container Sizes ----- */
-#define BASE_FLD_SZ	4
-#define EXP_FLD_SZ 	64
-#define DIV_FLD_SZ 	1024
+#define BASE_FLD_SZ	(4)
+#define EXP_FLD_SZ 	(64)
+#define DIV_FLD_SZ 	(1024)
 #define UNAME_FLD_SZ	(UNAMELEN + 1)
 
 
