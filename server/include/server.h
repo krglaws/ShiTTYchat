@@ -12,7 +12,13 @@
 
 #define RSA_ENCODING 62
 
-#define VERSION "0.0.1"
+#define DEFAULT_PORT (42069)
+
+void usage(char *name);
+
+bool valid_port(char *port);
+
+int server(char *port_str);
 
 #endif
 

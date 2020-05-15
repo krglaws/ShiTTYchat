@@ -3,22 +3,95 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <rsa.h>
 
+#include <rsa.h>
 #include <server.h>
 #include <client_manager.h>
 
+
 int main(int argc, char** argv)
 {
+  char *port = NULL;
+
+  /* get args */
+  int c;
+  while ((c = getopt(argc, argv, "p:")) != -1)
+  {
+    switch (c)
+    {
+    case 'p':
+      port = optarg;
+      break;
+    case '?':
+      usage(argv[0]);
+      return -1;
+    default:
+      abort();
+    }
+  }
+
+  if (optind < argc && argv[optind])
+  {
+    fprintf(stderr, "%s: unknown argument -- '%s'\n", argv[0], argv[optind]);
+    usage(argv[0]);
+    return -1;
+  }
+
+  /* validate port */
+  if (port && !valid_port(port))
+  {
+    usage(argv[0]);
+    return -1;
+  }
+
+  /* ne'er returns */
+  server(port);
+}
+
+
+void usage(char *name)
+{
+  fprintf(stderr, "usage: %s [-p <port>]\n", name);
+}
+
+
+bool valid_port(char *port)
+{
+  if (port == NULL) return true;
+
+  unsigned p = strtol(port, NULL, 10);
+
+  if (p < 1 || p > 65535)
+  {
+    fprintf(stderr, "invalid port\n");
+    return false;
+  }
+
+  return true;
+}
+
+
+int server(char *port_str)
+{
+  /* socket file descriptors */
   int server_fd, client_fd, active_fd, max_fd; 
+
+  /* server info */
   struct sockaddr_in server_addr, client_addr;
+  unsigned short port = DEFAULT_PORT;
   int addr_len = sizeof(struct sockaddr_in);
   char ip_str[20] = {0};
   fd_set readfds;
+
+  if (port_str)
+  {
+    port = strtol(port_str, NULL, 10);
+  }
 
   // initialize rsa keys
   rsa_key_t pubkey, privkey;
@@ -30,7 +103,7 @@ int main(int argc, char** argv)
 
   // set up server address
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(420);
+  server_addr.sin_port = htons(port);
   inet_pton(AF_INET, "0.0.0.0", &(server_addr.sin_addr));
 
   // create server socket

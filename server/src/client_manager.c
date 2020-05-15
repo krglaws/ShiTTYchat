@@ -2,11 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <time.h>
 #include <gmp.h>
-#include <rsa.h>
 
+#include <rsa.h>
 #include <comm.h>
 #include <server.h>
 #include <client_manager.h>
