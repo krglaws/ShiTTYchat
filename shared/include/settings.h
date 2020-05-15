@@ -14,5 +14,11 @@
 /* RSA key base encoding */
 #define RSAKEYENC (62)
 
+/* default port */
+#define DEFAULT_PORT (42069)
+
+/* maximum clients allowed to connect */
+#define MAXCLIENTS 10
+
 #endif
 

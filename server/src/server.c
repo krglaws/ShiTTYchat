@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
+#include <settings.h>
 #include <rsa.h>
 #include <server.h>
 #include <client_manager.h>
@@ -95,7 +96,7 @@ int server(char *port_str)
 
   // initialize rsa keys
   rsa_key_t pubkey, privkey;
-  rsa_init(pubkey, privkey, RSA_KEY_LEN, RSA_ENCODING);
+  rsa_init(pubkey, privkey, RSAKEYLEN, RSAKEYENC);
 
   // clear server and client addresses
   memset(&server_addr, 0, addr_len);

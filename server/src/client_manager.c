@@ -7,6 +7,7 @@
 #include <time.h>
 #include <gmp.h>
 
+#include <settings.h>
 #include <rsa.h>
 #include <comm.h>
 #include <server.h>
