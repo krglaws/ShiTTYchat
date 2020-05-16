@@ -156,39 +156,12 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
   // read message from new connection
   char msg[RECVBUFFLEN + 1];
   memset(msg, 0, RECVBUFFLEN + 1);
-  int len = receive_message(socket, msg, RECVBUFFLEN);
+  char *field_ptr;
 
   // return if something went wrong while reading from socket
-  if (len == -1)
+  if (receive_message(socket, msg, RECVBUFFLEN) == -1)
   {
     fprintf(stderr, "new_connection(): call to receive_message() failed\n");
-    return -1;
-  }
-
-  // check if UNAME field is present
-  char* field_ptr;
-  if ((field_ptr = strstr(msg, "UNAME: ")) == NULL)
-  {
-    fprintf(stderr, "new_connection(): request missing UNAME field\n");
-
-    char* err_resp = "Missing UNAME field\n";
-    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
-      fprintf(stderr, "new_connection(): failed to send error response\n");
-    return -1;    
-  }
-
-  // scan in UNAME
-  char uname[UNAME_FLD_SZ + 1];
-  sscanf(field_ptr, UNAME_FMT, uname);
-
-  // validate UNAME
-  if (validate_uname(uname) == -1)
-  {
-    fprintf(stderr, "new_connection(): request UNAME value is invalid\n");
-
-    char* err_resp = "Invalid UNAME value\n";
-    if (send_message(socket, err_resp, strlen(err_resp)) == -1)
-      fprintf(stderr, "new_connection(): failed to send error response\n");
     return -1;
   }
 
@@ -299,6 +272,32 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
     return -1;
   }
 
+  // check if UNAME field is present
+  if ((field_ptr = strstr(msg, "UNAME: ")) == NULL)
+  {
+    fprintf(stderr, "new_connection(): request missing UNAME field\n");
+
+    char* err_resp = "Missing UNAME field\n";
+    if (send_encrypted_message(socket, err_resp, strlen(err_resp), client_key) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;    
+  }
+
+  // scan in UNAME
+  char uname[UNAME_FLD_SZ + 1];
+  sscanf(field_ptr, UNAME_FMT, uname);
+
+  // validate UNAME
+  if (validate_uname(uname) == -1)
+  {
+    fprintf(stderr, "new_connection(): username already exists\n");
+
+    char* err_resp = "Username already exists\n";
+    if (send_encrypted_message(socket, err_resp, strlen(err_resp), client_key) == -1)
+      fprintf(stderr, "new_connection(): failed to send error response\n");
+    return -1;
+  }
+
   // create new client and fill out entry
   client_entry_t* new_entry = malloc(sizeof(client_entry_t));
 
@@ -318,7 +317,7 @@ int new_connection(const int socket, const char* ip, rsa_key_t pubkey)
   // looks good. prepare server info
   char response[RECVBUFFLEN];
   char* template = ACCEPT_RESP_TMPLT;
-  len = sprintf(response,
+  int len = sprintf(response,
           template,
           pubkey->b,
           pubkey->e,

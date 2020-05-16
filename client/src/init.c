@@ -214,6 +214,13 @@ int handshake(int sock, char *uname, rsa_key_t pubkey, rsa_key_t privkey, rsa_ke
     return -1;
   }
 
+  /* check if username already exists */
+  if (strcmp(msgbuff, "Username already exists\n") == 0)
+  {
+    fprintf(stderr, "handshake(): username already exists\n");
+    return -1;
+  }
+
   /* parse server info */
   char *field_ptr;
   char parse_buff[RECVBUFFLEN];
