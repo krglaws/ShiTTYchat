@@ -19,7 +19,7 @@ Use ctrl+w to toggle the selected window (top or bottom). The up and down arrows
 ## Settings
 Several important application settings may be modified (carefully) in the `shared/include/settings.h` header file, where you can change things like the encryption key bit length, the maximum number of users permitted into a server, the maximum username length, and others.
 
-## Depencies
+## Dependencies
 1. ncurses `sudo apt install libncurses5-dev`
 2. GNU Multiple Precision Arithmetic Library `sudo apt install libgmp3-dev`
 
