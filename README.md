@@ -14,7 +14,7 @@ pute:~/shittychat$ ./client.out -u jeff -i 73.178.35.36
 ![sampleoutput](screenshots/1.png)
 
 ## Controls
-Use ctrl+w to toggle the selected window (top or bottom). The up and down arrows are used to scroll the top window, and to change line in the bottom window.
+Use ctrl+w to toggle the selected window (top or bottom). The up and down arrows are used to scroll the top window when the top window is selected. All four arrow keys may be used to navigate your text when the bottom window is selected.
 
 ## Settings
 Several important application settings may be modified (carefully) in the `shared/include/settings.h` header file, where you can change things like the encryption key bit length, the maximum number of users permitted into a server, the maximum username length, and others.
@@ -24,4 +24,5 @@ Several important application settings may be modified (carefully) in the `share
 2. GNU Multiple Precision Arithmetic Library `sudo apt install libgmp3-dev`
 
 ## Notes
-*\* "Textbook" meaning I ripped the algorithm straight off of Wikipedia, and is probably easily exploited if you know what you're doing. Obviously, you should NOT send sensitive information using this application, as its safety will not be guarunteed. I decided to encrypt the client-server communication for the sole purpose of learning a bit about encryption.*
+*\* "Textbook" meaning I ripped the algorithm straight off of Wikipedia, and is probably easily exploited if you know what you're doing. Obviously, you should NOT send sensitive information using this application, as its safety will not be guaranteed. I decided to encrypt the client-server communication for the sole purpose of learning a bit about encryption.*
+
