@@ -26,7 +26,7 @@
 /* RSA key bit length */
 #define RSAKEYLEN (1024)
 
-/* maximum number of chunks(1) allowed */
+/* maximum number of encryption "chunks" allowed */
 #define NUMCHUNKS (4)
 
 /* Size of buffer for receiving raw data */
