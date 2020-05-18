@@ -78,7 +78,7 @@ static int broadcast(const char* uname, const char* msg)
 
   // generate broadcast message
   char outgoing[BROADCASTLEN];
-  sprintf(outgoing, "(%s) %s: %s\n", time_str, uname, msg);
+  sprintf(outgoing, "(%s) %s: %s", time_str, uname, msg);
 
   int result = 0;
 
