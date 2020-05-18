@@ -11,6 +11,7 @@ struct __client_entry_struct
 {
   int socket;
   char ip[20];
+  int missed_beats;
   char uname[UNAMELEN + 1]; // add one for NULL terminator
   rsa_key_t key;
   client_entry_t* next_entry;
@@ -67,6 +68,11 @@ int initialize_fdset(fd_set* fds);
  */
 int get_active_fd(fd_set* fds);
 
+
+/*
+ * this is periodically called to check the pulse of each client
+ */
+void heartbeat(int sig);
 
 #endif
 

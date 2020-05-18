@@ -3,11 +3,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include <settings.h>
 #include <rsa.h>
@@ -138,9 +141,26 @@ int server(char *port_str)
     max_fd = initialize_fdset(&readfds);
 
     // await connections
-    if (select(max_fd+1, &readfds, NULL, NULL, NULL) <= 0)
+    while (1)
     {
-      perror("failed to wait for socket activity");
+      if (select(max_fd+1, &readfds, NULL, NULL, NULL) == -1)
+      {
+        // check if we were interrupted by heartbeat timer
+	if (errno == EINTR)
+          continue;
+        else
+        {
+          perror("server(): select()");
+          exit(EXIT_FAILURE);
+        }
+      }
+      else break;
+    }
+
+    // pause heartbeat handler
+    if (signal(SIGALRM, SIG_IGN) == SIG_ERR)
+    {
+      perror("server(): signal():");
       exit(EXIT_FAILURE);
     }
 
@@ -180,6 +200,13 @@ int server(char *port_str)
       // handle incoming message from existing client
       if (handle_client_message(active_fd, privkey) == -1)
         fprintf(stderr, "server(): call to handle_client_message() failed\n");
+    }
+
+    // resume heartbeat handler
+    if (signal(SIGALRM, heartbeat) == SIG_ERR)
+    {
+      perror("server(): signal():");
+      exit(EXIT_FAILURE);
     }
   }
 }

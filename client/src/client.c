@@ -23,7 +23,8 @@ int rec_buff_size;
 int line;
 int sock;
 WINDOW *win;
-rsa_key_t key;
+rsa_key_t ckey;
+rsa_key_t skey;
 pthread_mutex_t lock;
 
 
@@ -44,9 +45,13 @@ int client_loop(int sock_fd, rsa_key_t privkey, rsa_key_t servkey)
   sock = sock_fd;
   win = top;
 
-  key->d = privkey->d;
-  key->e = privkey->e;
-  key->b = privkey->b;
+  ckey->b = privkey->b;
+  ckey->d = privkey->d;
+  ckey->e = privkey->e;
+
+  skey->b = servkey->b;
+  skey->d = servkey->d;
+  skey->e = servkey->e;
 
   int err;
   if (err = pthread_mutex_init(&lock, NULL))
@@ -246,12 +251,22 @@ int incoming_message_handler(void *args)
   while (1)
   {
     /* await messages from server */
-    bytes = receive_encrypted_message(sock, tmp_buff, bufflen, key);
+    bytes = receive_encrypted_message(sock, tmp_buff, bufflen, ckey);
 
     if (bytes == -1)
     {
       fprintf(stderr, "incoming_message_handler(): failed on call to receive_encrypted_message()\n");
       return -1;
+    }
+
+    if (strcmp(tmp_buff, "HEARTBEAT\n") == 0)
+    {
+      if (send_encrypted_message(sock, tmp_buff, bytes, skey) == -1)
+      {
+        fprintf(stderr, "incoming_message_handler(): failed on call to send_encrypted_message()\n");
+        return -1;
+      }
+      continue;
     }
 
     /* lock shared data */

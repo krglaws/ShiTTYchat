@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <signal.h>
 #include <unistd.h>
 #include <time.h>
 #include <gmp.h>
@@ -32,6 +33,16 @@ void init_client_manager(const int server_socket)
   client_list->socket = server_socket;
   memcpy(client_list->ip, ip, 20);
   memcpy(client_list->uname, uname, UNAMELEN);
+
+  // set heartbeat handler
+  if (signal(SIGALRM, heartbeat) == SIG_ERR)
+  {
+    perror("server(): signal()");
+    exit(EXIT_FAILURE);
+  }
+
+  // set timer
+  alarm(30);
 }
 
 
@@ -70,6 +81,7 @@ static int broadcast(const char* uname, const char* msg)
   sprintf(outgoing, "(%s) %s: %s\n", time_str, uname, msg);
 
   int result = 0;
+
   // broadcast (skip server entry)
   client_entry_t* iterator = client_list->next_entry;
   while (iterator)
@@ -79,7 +91,15 @@ static int broadcast(const char* uname, const char* msg)
     {
       fprintf(stderr, "broadcast(): call to send_encrypted_message() failed\n");
       result = -1;
+
+      /* this should never fail */
+      if (remove_client(iterator->next_entry->socket) == -1)
+      {
+        fprintf(stderr, "heartbeat(): call to remove_client() failed\n");
+        exit(-1);
+      }
     }
+
     iterator = iterator->next_entry;
   }
 
@@ -123,6 +143,14 @@ int handle_client_message(const int socket, const rsa_key_t privkey)
     return 0;
   }
 
+  // check if this is heartbeat message
+  if (strcmp(msg, "HEARTBEAT\n") == 0)
+  {
+    client->missed_beats = 0;
+    return 0;
+  }
+
+  // otherwise, broadcast the message everywhere
   if (broadcast(client->uname, msg) == -1)
   {
     fprintf(stderr, "handle_client_message(): call to broadcast() failed\n");
@@ -452,5 +480,53 @@ int get_active_fd(fd_set* fds)
 
   fprintf(stderr, "get_active_fd(): could not find active socket\n");
   return -1;
+}
+
+
+/* iterate over every client, send heartbeat, increment missed beats */
+void heartbeat(int sig)
+{
+  client_entry_t* iterator = client_list;
+
+  /* loop with previous entry in case curr gets removed */
+  while (iterator->next_entry)
+  {
+    if (iterator->next_entry->missed_beats == 3)
+    {
+      fprintf(stderr, "heartbeat(): %s (%s) timed out\n", iterator->uname, iterator->ip);
+
+      /* this should never fail */
+      if (remove_client(iterator->next_entry->socket) == -1)
+      {
+        fprintf(stderr, "heartbeat(): call to remove_client() failed\n");
+        exit(-1);
+      }
+
+      continue;
+    }
+
+    char *msg = "HEARTBEAT\n";
+    if (send_encrypted_message(iterator->next_entry->socket,
+                               msg,
+                               strlen(msg),
+                               iterator->next_entry->key) == -1)
+    {
+      fprintf(stderr, "heartbeat(): call to send_encrypted_message() failed\n");
+
+      /* this should never fail */
+      if (remove_client(iterator->next_entry->socket) == -1)
+      {
+        fprintf(stderr, "heartbeat(): call to remove_client() failed\n");
+        exit(-1);
+      }
+    }
+
+    /* increment missed beats */
+    iterator->next_entry->missed_beats++;
+    iterator = iterator->next_entry;
+  }
+
+  // reset timer
+  alarm(30);
 }
 
